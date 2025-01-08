@@ -9,6 +9,9 @@
 
 <div align="center">
   <a href="https://nexaforge.dev">Try it live</a>
+  <p align="center">
+    Soon live.
+  </p>
 </div>
 
 ## Overview
@@ -58,7 +61,7 @@ NexaForge is a powerful web application that allows you to generate functional a
 
 1. Clone the repository:
 ```bash
-git clone https://github.com/yourusername/nexaforge
+git clone https://github.com/nexaforge-dev/nexaforge
 ```
 
 2. Create a `.env` file and add your API keys:
