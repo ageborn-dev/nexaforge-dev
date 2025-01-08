@@ -572,7 +572,11 @@ export default function Home() {
                   </Select.Portal>
                 </Select.Root>
                 <button
-                  onClick={() => setShowSettings(!showSettings)}
+                  onClick={(e) => {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    setShowSettings(!showSettings);
+                  }}
                   className="group rounded-lg p-2 transition-all duration-200 hover:bg-white/30 disabled:opacity-50"
                   title="AI Settings"
                 >

@@ -19,6 +19,7 @@ interface AISettingsPanelProps {
   provider: string;
   settings: AISettings;
   onSettingsChange: (settings: AISettings) => void;
+  onApply?: () => void;
 }
 
 const settingTooltips = {
@@ -113,6 +114,7 @@ const AISettingsPanel: React.FC<AISettingsPanelProps> = ({
   provider,
   settings,
   onSettingsChange,
+
 }) => {
   const [localSettings, setLocalSettings] = useState<AISettings>(settings);
   const [currentModel, setCurrentModel] = useState(model);
@@ -132,7 +134,6 @@ const AISettingsPanel: React.FC<AISettingsPanelProps> = ({
   ) => {
     const newSettings = { ...localSettings, [key]: value };
     setLocalSettings(newSettings);
-    onSettingsChange(newSettings);
   };
 
   const modelConfig = Object.values(AI_PROVIDERS)
@@ -314,13 +315,28 @@ const AISettingsPanel: React.FC<AISettingsPanelProps> = ({
           onClick={() => {
             const defaultSettings = getDefaultSettingsForModel(model);
             setLocalSettings(defaultSettings);
-            onSettingsChange(defaultSettings);
           }}
           className="flex w-full items-center justify-center gap-2 rounded-lg border border-white/20 bg-white/10 px-4 py-2 text-sm text-white hover:bg-white/20"
         >
           <Undo2 className="h-4 w-4" />
           Reset to Model Defaults
         </button>
+
+        {/* Action Buttons */}
+        <div className="flex gap-2">
+          <button
+            onClick={onClose}
+            className="flex-1 rounded-lg border border-white/20 bg-white/10 px-4 py-2 text-sm text-white hover:bg-white/20"
+          >
+            Cancel
+          </button>
+          <button
+            onClick={() => onSettingsChange(localSettings)}
+            className="flex-1 rounded-lg bg-blue-500 px-4 py-2 text-sm text-white hover:bg-blue-600"
+          >
+            Apply
+          </button>
+        </div>
       </div>
     </div>
   );
