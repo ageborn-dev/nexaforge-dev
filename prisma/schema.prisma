@@ -1,0 +1,58 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = "file:./dev.db"
+}
+
+model GeneratedApp {
+  id          String   @id @default(nanoid(5))
+  model       String
+  prompt      String
+  code        String
+  createdAt   DateTime @default(now())
+  analytics   Analytics?
+  savedApp    SavedApp?
+  sharedCode  SharedCode?
+
+  @@index([id])
+}
+
+model SavedApp {
+  id          String       @id @default(cuid())
+  title       String
+  description String?
+  generatedApp GeneratedApp @relation(fields: [appId], references: [id])
+  appId       String       @unique
+  createdAt   DateTime     @default(now())
+}
+
+model Analytics {
+  id                    String       @id @default(cuid())
+  generatedApp         GeneratedApp @relation(fields: [appId], references: [id])
+  appId                String       @unique
+  modelName            String
+  provider             String
+  promptTokens         Int
+  responseTokens       Int
+  totalTokens          Int
+  maxTokens            Int
+  utilizationPercentage Float
+  createdAt            DateTime     @default(now())
+}
+
+model SharedCode {
+  id              String       @id @default(nanoid(10))
+  appId           String       @unique
+  generatedApp    GeneratedApp @relation(fields: [appId], references: [id])
+  content         String?      // For encrypted content
+  isEncrypted     Boolean     @default(false)
+  expiresAt       DateTime?
+  allowedViews    Int?
+  remainingViews  Int?
+  createdAt       DateTime    @default(now())
+
+  @@index([appId])
+}

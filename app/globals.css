@@ -1,0 +1,78 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* Font Definitions */
+@font-face {
+  font-family: "Aeonik";
+  src: url("/Aeonik/Aeonik-Regular.ttf");
+  font-weight: 400;
+  font-style: normal;
+}
+
+@font-face {
+  font-family: "Aeonik";
+  src: url("/Aeonik/Aeonik-Medium.ttf");
+  font-weight: 500;
+  font-style: normal;
+}
+
+@font-face {
+  font-family: "Aeonik";
+  src: url("/Aeonik/Aeonik-Bold.ttf");
+  font-weight: 700;
+  font-style: normal;
+}
+
+/* Animation Utilities */
+@layer utilities {
+  .animated-gradient {
+    background-size: 400% 400%;
+    animation: gradient 15s ease infinite;
+  }
+}
+
+/* Smooth Transitions */
+@layer base {
+  body {
+    @apply transition-colors duration-300;
+  }
+
+  ::selection {
+    @apply bg-blue-500/30 dark:bg-blue-400/30;
+  }
+}
+
+/* Custom Scrollbar */
+::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+::-webkit-scrollbar-thumb {
+  @apply bg-gray-200 dark:bg-gray-700;
+  border-radius: 4px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  @apply bg-gray-300 dark:bg-gray-600;
+}
+
+/* Glass Effect */
+.glass {
+  @apply bg-white/10 backdrop-blur-sm dark:bg-gray-900/10;
+}
+
+/* Reduce Motion */
+@media (prefers-reduced-motion: reduce) {
+  * {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+}
