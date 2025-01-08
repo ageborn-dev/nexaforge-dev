@@ -7,26 +7,15 @@ import { decrypt } from "@/lib/encryption";
 import QRCode from "qrcode";
 import Image from 'next/image';
 
-async function generateQRCode(url: string): Promise<string> {
-  try {
-    return await QRCode.toDataURL(url, {
-      width: 400,
-      margin: 2,
-      color: {
-        dark: '#000',
-        light: '#fff'
-      }
-    });
-  } catch (err) {
-    console.error('QR Code generation failed:', err);
-    return '';
-  }
-}
+// Explicitly declare segment configuration
+export const dynamic = 'force-dynamic';
+export const runtime = 'nodejs';
 
+// Remove type declarations and let Next.js infer them
 export async function generateMetadata({
   params,
 }: {
-  params: { id: string };
+  params: { id: string }
 }): Promise<Metadata> {
   const generatedApp = await getGeneratedAppByID(params.id);
 
@@ -47,17 +36,33 @@ export async function generateMetadata({
   };
 }
 
-export default async function Page({ 
+export default async function SharePage({
   params,
-  searchParams 
-}: { 
-  params: { id: string };
-  searchParams: { key?: string; qr?: string }  
-}) {
-  // if process.env.DATABASE_URL is not set, throw an error
-  if (typeof params.id !== "string") {
-    notFound();
+  searchParams,
+}: {
+  params: { id: string },
+  searchParams: { [key: string]: string | undefined }
   }
+  ) {
+  const getGeneratedAppByID = cache(async (id: string) => {
+    const generatedApp = await client.generatedApp.findUnique({
+      where: { id },
+    });
+    return generatedApp;
+  });
+
+  const generateQRCode = async (url: string) => {
+    try {
+      const qrCodeDataUrl = await QRCode.toDataURL(url);
+      return qrCodeDataUrl;
+    } catch (error) {
+      console.error('Error generating QR code:', error);
+      return null;
+    }
+  };
+
+  const key = typeof searchParams.key === 'string' ? searchParams.key : undefined;
+  const qr = typeof searchParams.qr === 'string' ? searchParams.qr : undefined;
 
   const generatedApp = await getGeneratedAppByID(params.id);
 
@@ -67,7 +72,7 @@ export default async function Page({
 
   // Generate QR code if requested
   let qrCodeDataUrl: string | null = null;
-  if (searchParams.qr === 'true') {
+  if (qr === 'true') {
     qrCodeDataUrl = await generateQRCode(`${process.env.NEXT_PUBLIC_BASE_URL}/share/${params.id}`);
   }
 
@@ -79,15 +84,13 @@ export default async function Page({
   if (sharedCode && Array.isArray(sharedCode) && sharedCode.length > 0) {
     const shareData = sharedCode[0];
     
-    // Check if encrypted and no key provided
-    if (shareData.isEncrypted && !searchParams.key) {
+    if (shareData.isEncrypted && !key) {
       return redirect(`/share/${params.id}/protected`);
     }
 
-    // Decrypt content if needed
-    if (shareData.isEncrypted && searchParams.key) {
+    if (shareData.isEncrypted && key) {
       try {
-        const decrypted = await decrypt(shareData.content, searchParams.key);
+        const decrypted = await decrypt(shareData.content, key);
         generatedApp.code = JSON.parse(decrypted).code;
       } catch (error) {
         console.error('Decryption failed:', error);
@@ -95,17 +98,14 @@ export default async function Page({
       }
     }
 
-    // Check expiration
     if (shareData.expiresAt && new Date(shareData.expiresAt) < new Date()) {
       return <div>Share link expired</div>;
     }
 
-    // Check view limit
     if (shareData.remainingViews !== null && shareData.remainingViews <= 0) {
       return <div>Maximum views reached</div>;
     }
 
-    // Update view count
     if (shareData.remainingViews !== null) {
       await client.$executeRaw`
         UPDATE "SharedCode" 
@@ -140,3 +140,19 @@ const getGeneratedAppByID = cache(async (id: string) => {
     },
   });
 });
+
+async function generateQRCode(url: string): Promise<string> {
+  try {
+    return await QRCode.toDataURL(url, {
+      width: 400,
+      margin: 2,
+      color: {
+        dark: '#000',
+        light: '#fff'
+      }
+    });
+  } catch (err) {
+    console.error('QR Code generation failed:', err);
+    return '';
+  }
+}
