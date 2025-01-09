@@ -8,7 +8,7 @@
 </p>
 
 <div align="center">
-  <a href="https://nexaforge.dev">Try it live</a>
+  <a href="https://nexaforge.example.com">Try it live</a>
   <p align="center">
     Soon live.
   </p>
