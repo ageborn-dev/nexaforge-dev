@@ -67,6 +67,16 @@ const getDefaultSettingsForModel = (modelId: string): AISettings => {
         frequencyPenalty: 0,
         presencePenalty: 0,
       };
+      case "ollama": 
+        return {
+          temperature: 0.7,
+          maxTokens: model.maxTokens,
+          topP: 1,
+          streamOutput: true,
+          frequencyPenalty: 0,
+          presencePenalty: 0,
+        };
+
     default:
       return defaultProviderSettings.anthropic;
   }
@@ -83,7 +93,7 @@ const defaultProviderSettings: Record<string, AISettings> = {
   },
   anthropic: {
     temperature: 0.7,
-    maxTokens: 200000,
+    maxTokens: 100000,
     topP: 1,
     streamOutput: true,
     frequencyPenalty: 0,
@@ -91,7 +101,7 @@ const defaultProviderSettings: Record<string, AISettings> = {
   },
   google: {
     temperature: 0.7,
-    maxTokens: 1000000,
+    maxTokens: 100000,
     topP: 1,
     streamOutput: true,
     frequencyPenalty: 0,
@@ -100,6 +110,14 @@ const defaultProviderSettings: Record<string, AISettings> = {
   deepseek: {
     temperature: 0.0,
     maxTokens: 32768,
+    topP: 1,
+    streamOutput: true,
+    frequencyPenalty: 0,
+    presencePenalty: 0,
+  },
+  ollama: {
+    temperature: 0.7,
+    maxTokens: 4096,
     topP: 1,
     streamOutput: true,
     frequencyPenalty: 0,

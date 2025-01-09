@@ -3,6 +3,7 @@ export interface AIModel {
   name: string;
   provider: string;
   maxTokens: number;
+  fullModelName?: string;
 }
 
 export const AI_PROVIDERS: Record<string, AIModel[]> = {
@@ -91,14 +92,16 @@ export const AI_PROVIDERS: Record<string, AIModel[]> = {
       provider: 'deepseek',
       maxTokens: 32768
     }
-  ]
+  ],
+  ollama: []
 };
 
 export const DEFAULT_MODELS = {
   openai: 'gpt-4o',
   anthropic: 'claude-3-5-sonnet-20241022',
   google: 'gemini-2.0-flash-exp',
-  deepseek: 'deepseek-chat'
+  deepseek: 'deepseek-chat',
+  ollama: ''
 };
 
 export type EnabledProviders = {
@@ -106,12 +109,68 @@ export type EnabledProviders = {
   anthropic: boolean;
   google: boolean;
   deepseek: boolean;
+  ollama: boolean;
 };
 
-// Check if API keys exist in environment variables
 export const ENABLED_PROVIDERS: EnabledProviders = {
   openai: !!process.env.OPENAI_API_KEY,
   anthropic: !!process.env.ANTHROPIC_API_KEY,
   google: !!process.env.GOOGLE_API_KEY,
-  deepseek: !!process.env.DEEPSEEK_API_KEY
+  deepseek: !!process.env.DEEPSEEK_API_KEY,
+  ollama: false
 };
+
+import { fetchOllamaModels } from "../utils/ollama";
+
+export async function initializeOllamaModels() {
+  try {
+    const ollamaModels = await fetchOllamaModels();
+    
+    if (ollamaModels.length > 0) {
+      // Map Ollama models to our AIModel interface
+      AI_PROVIDERS.ollama = ollamaModels.map(model => ({
+        id: model.name,
+        name: model.displayName, 
+        provider: 'ollama',
+        maxTokens: getOllamaModelMaxTokens(model.details),
+        fullModelName: model.name
+      }));
+
+      // Set the first model as default if available
+      if (AI_PROVIDERS.ollama.length > 0) {
+        DEFAULT_MODELS.ollama = AI_PROVIDERS.ollama[0].id;
+        ENABLED_PROVIDERS.ollama = true;
+      }
+    }
+  } catch (error) {
+    console.error('Error initializing Ollama:', error);
+    ENABLED_PROVIDERS.ollama = false;
+  }
+}
+
+// Helper function to determine max tokens based on model details
+function getOllamaModelMaxTokens(details: { parameter_size?: string }): number {
+  if (!details?.parameter_size) return 4096;
+  
+  // Extract the number from strings like "3.2B", "8B", etc.
+  const sizeMatch = details.parameter_size.match(/(\d+(?:\.\d+)?)/);
+  if (!sizeMatch) return 4096;
+  
+  const size = parseFloat(sizeMatch[1]);
+  
+  // Assign token limits based on model size
+  if (size <= 3) return 4096;
+  if (size <= 7) return 8192;
+  if (size <= 13) return 16384;
+  return 32768; // For larger models
+}
+
+export async function refreshOllamaModels() {
+  await initializeOllamaModels();
+}
+
+// Helper function to get full model name (mainly for Ollama)
+export function getModelFullName(modelId: string): string {
+  const ollamaModel = AI_PROVIDERS.ollama.find(model => model.id === modelId);
+  return ollamaModel?.fullModelName || modelId;
+}

@@ -3,33 +3,34 @@ import { z } from "zod";
 import { GoogleGenerativeAI } from "@google/generative-ai";
 import OpenAI from "openai";
 import Anthropic from "@anthropic-ai/sdk";
-import { AI_PROVIDERS } from "../../../config/ai-providers";
+import {
+  AI_PROVIDERS,
+  initializeOllamaModels,
+} from "../../../config/ai-providers";
+import { createOllamaRequest, handleOllamaStream } from "../../../utils/ollama";
 
 // Initialize API clients
 const googleApiKey = process.env.GOOGLE_API_KEY || "";
 const genAI = new GoogleGenerativeAI(googleApiKey);
-
-const openai = new OpenAI({
-  apiKey: process.env.OPENAI_API_KEY || "",
-});
-
+const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY || "" });
 const anthropic = new Anthropic({
   apiKey: process.env.ANTHROPIC_API_KEY || "",
 });
-
-// Initialize DeepSeek client using OpenAI SDK
 const deepseek = new OpenAI({
-  baseURL: 'https://api.deepseek.com/',
+  baseURL: "https://api.deepseek.com/",
   apiKey: process.env.DEEPSEEK_API_KEY || "",
 });
 
 // Helper function to clean code text
 function cleanCodeText(text: string): string {
   // Remove code block markers if present
-  text = text.replace(/```[\w]*\n?/g, '');
+  text = text.replace(/```[\w]*\n?/g, "");
   // Ensure proper export syntax
-  if (!text.includes('export default')) {
-    text = text.replace(/^(const|function|class)\s+(\w+)/, 'export default $1 $2');
+  if (!text.includes("export default")) {
+    text = text.replace(
+      /^(const|function|class)\s+(\w+)/,
+      "export default $1 $2",
+    );
   }
   return text.trim();
 }
@@ -45,6 +46,16 @@ export async function POST(req: Request) {
           content: z.string(),
         }),
       ),
+      settings: z
+        .object({
+          temperature: z.number(),
+          maxTokens: z.number(),
+          topP: z.number(),
+          streamOutput: z.boolean(),
+          frequencyPenalty: z.number(),
+          presencePenalty: z.number(),
+        })
+        .optional(),
     })
     .safeParse(json);
 
@@ -52,13 +63,26 @@ export async function POST(req: Request) {
     return new Response(result.error.message, { status: 422 });
   }
 
-  let { model, messages } = result.data;
+  let { model, messages, settings } = result.data;
   let systemPrompt = getSystemPrompt();
   const prompt = messages[0].content;
 
+  await initializeOllamaModels();
+
+  console.log("=== Model Validation Debug ===");
+  console.log("Received model:", model);
+  console.log("AI_PROVIDERS after init:", {
+    providers: Object.keys(AI_PROVIDERS),
+    ollamaModels: AI_PROVIDERS.ollama.map((m) => ({ id: m.id, name: m.name })),
+  });
+  console.log(
+    "Model exists in Ollama:",
+    AI_PROVIDERS.ollama.some((m) => m.id === model),
+  );
+  
   // Find the provider and model details
-  const providerEntry = Object.entries(AI_PROVIDERS).find(([_, models]) => 
-    models.some(m => m.id === model)
+  const providerEntry = Object.entries(AI_PROVIDERS).find(([_, models]) =>
+    models.some((m) => m.id === model),
   );
 
   if (!providerEntry) {
@@ -76,15 +100,17 @@ export async function POST(req: Request) {
       case "google":
         const geminiModel = genAI.getGenerativeModel({ model });
         const geminiStream = await geminiModel.generateContentStream(
-          prompt + systemPrompt + "\nPlease ONLY return code, NO backticks or language names. Don't start with ```typescript or ```javascript or ```tsx or ```."
+          prompt +
+            systemPrompt +
+            "\nPlease ONLY return code, NO backticks or language names. Don't start with ```typescript or ```javascript or ```tsx or ```.",
         );
         stream = new ReadableStream({
           async start(controller) {
-            let buffer = '';
+            let buffer = "";
             for await (const chunk of geminiStream.stream) {
               buffer += chunk.text();
               controller.enqueue(encoder.encode(cleanCodeText(buffer)));
-              buffer = '';
+              buffer = "";
             }
             controller.close();
           },
@@ -96,20 +122,20 @@ export async function POST(req: Request) {
           model,
           messages: [
             { role: "system", content: systemPrompt },
-            { role: "user", content: prompt }
+            { role: "user", content: prompt },
           ],
           stream: true,
           temperature: 0.7,
         });
         stream = new ReadableStream({
           async start(controller) {
-            let buffer = '';
+            let buffer = "";
             for await (const chunk of openaiStream) {
               if (chunk.choices[0]?.delta?.content) {
                 buffer += chunk.choices[0].delta.content;
                 if (buffer.length > 100) {
                   controller.enqueue(encoder.encode(cleanCodeText(buffer)));
-                  buffer = '';
+                  buffer = "";
                 }
               }
             }
@@ -130,13 +156,13 @@ export async function POST(req: Request) {
         });
         stream = new ReadableStream({
           async start(controller) {
-            let buffer = '';
+            let buffer = "";
             for await (const chunk of anthropicStream) {
               if (chunk.type === "content_block_delta" && chunk.delta?.text) {
                 buffer += chunk.delta.text;
                 if (buffer.length > 100) {
                   controller.enqueue(encoder.encode(cleanCodeText(buffer)));
-                  buffer = '';
+                  buffer = "";
                 }
               }
             }
@@ -153,40 +179,72 @@ export async function POST(req: Request) {
           model,
           messages: [
             { role: "system", content: systemPrompt },
-            { role: "user", content: prompt }
+            { role: "user", content: prompt },
           ],
           stream: true,
           temperature: 0.0,
         });
-        
+
         stream = new ReadableStream({
           async start(controller) {
-            let buffer = '';
+            let buffer = "";
             let lastEnqueueTime = Date.now();
-            
+
             try {
               for await (const chunk of response) {
                 if (chunk.choices[0]?.delta?.content) {
                   buffer += chunk.choices[0].delta.content;
-                  
+
                   const now = Date.now();
                   if (now - lastEnqueueTime >= 100 && buffer.length > 0) {
                     controller.enqueue(encoder.encode(cleanCodeText(buffer)));
-                    buffer = '';
+                    buffer = "";
                     lastEnqueueTime = now;
                   }
                 }
               }
-              
+
               if (buffer) {
                 controller.enqueue(encoder.encode(cleanCodeText(buffer)));
               }
-              
+
               controller.close();
             } catch (error) {
-              console.error('DeepSeek streaming error:', error);
+              console.error("DeepSeek streaming error:", error);
               controller.error(error);
             }
+          },
+        });
+        break;
+
+      case "ollama":
+        
+        const ollamaResponse = await fetch(
+          "http://localhost:11434/api/generate",
+          createOllamaRequest(
+            model,
+            prompt +
+              systemPrompt +
+              "\nPlease ONLY return code, NO backticks or language names.",
+            settings,
+          ),
+        );
+
+        if (!ollamaResponse.ok) {
+          const errorData = await ollamaResponse.text();
+          console.error("Ollama error:", errorData);
+          throw new Error(`Ollama API request failed: ${errorData}`);
+        }
+
+        stream = new ReadableStream({
+          async start(controller) {
+            await handleOllamaStream(
+              ollamaResponse,
+              controller,
+              encoder,
+              cleanCodeText,
+            );
+            controller.close();
           },
         });
         break;
@@ -197,41 +255,58 @@ export async function POST(req: Request) {
 
     return new Response(stream, {
       headers: {
-        'Content-Type': 'text/plain; charset=utf-8',
-        'Transfer-Encoding': 'chunked',
-        'Cache-Control': 'no-cache',
-        'Connection': 'keep-alive',
+        "Content-Type": "text/plain; charset=utf-8",
+        "Transfer-Encoding": "chunked",
+        "Cache-Control": "no-cache",
+        Connection: "keep-alive",
       },
     });
   } catch (error) {
-    console.error('Error generating code:', error);
+    console.error("Error generating code:", error);
     return new Response(
-      `Error generating code: ${error instanceof Error ? error.message : 'Unknown error'}`,
-      { status: 500 }
+      `Error generating code: ${error instanceof Error ? error.message : "Unknown error"}`,
+      { status: 500 },
     );
   }
 }
 
 function getSystemPrompt() {
-  let systemPrompt = 
-`You are an expert frontend React engineer who is also a great UI/UX designer. Follow the instructions carefully, I will tip you $1 million if you do a good job:
+  let systemPrompt = `You are an expert frontend React engineer who is also a great UI/UX designer. Follow the instructions carefully, I will tip you $1 million if you do a good job:
 
-- Think carefully step by step.
-- Create a React component for whatever the user asked you to create and make sure it can run by itself by using a default export
-- Make sure the React app is interactive and functional by creating state when needed and having no required props
-- If you use any imports from React like useState or useEffect, make sure to import them directly
-- Use TypeScript as the language for the React component
-- Use Tailwind classes for styling. DO NOT USE ARBITRARY VALUES (e.g. \`h-[600px]\`). Make sure to use a consistent color palette.
-- Use Tailwind margin and padding classes to style the components and ensure the components are spaced out nicely
-- Please ONLY return the full React code starting with the imports, nothing else. It's very important for my job that you only return the React code with imports. DO NOT START WITH \`\`\`typescript or \`\`\`javascript or \`\`\`tsx or \`\`\`.
-- ONLY IF the user asks for a dashboard, graph or chart, the recharts library is available to be imported, e.g. \`import { LineChart, XAxis, ... } from "recharts"\` & \`<LineChart ...><XAxis dataKey="name"> ...\`. Please only use this when needed.
-- For placeholder images, please use a <div className="bg-gray-200 border-2 border-dashed rounded-xl w-16 h-16" />
-  `;
+- Think carefully step by step about building the most user-friendly and beautiful version of what was requested
+- Create a React component with zero required props that runs completely standalone
+- Make the component fully interactive with proper state management and event handlers
+- Add engaging animations and transitions where appropriate
+- Include proper loading states and error handling
+- Make it mobile-responsive with a great experience on all devices
+- Add helpful hover states and visual feedback for interactions
 
-  systemPrompt += `
-    NO OTHER LIBRARIES (e.g. zod, hookform) ARE INSTALLED OR ABLE TO BE IMPORTED.
-    MAKE SURE TO USE export default FOR THE MAIN COMPONENT.
-  `;
+Technical Requirements:
+- Import React hooks directly (useState, useEffect, etc.)
+- Use TypeScript with proper types and interfaces
+- Use only standard Tailwind classes for styling - NO ARBITRARY VALUES like h-[600px]
+- Use proper margin/padding classes for consistent spacing
+- Use a beautiful and consistent color palette
+- Always include export default for the main component
+- Handle all edge cases and loading states
+
+Formatting Requirements:
+- Start directly with imports, no explanations or comments
+- No markdown code blocks or backticks
+- No typescript/javascript/tsx tags
+- Just clean, working React code
+
+Available Libraries:
+- React core library only
+- Recharts ONLY for dashboards/charts/graphs:
+  import { LineChart, XAxis, ... } from "recharts"
+  <LineChart ...><XAxis dataKey="name"> ...
+
+For Images:
+- Use placeholder: <div className="bg-gray-200 border-2 border-dashed rounded-xl w-16 h-16" />
+
+NO OTHER LIBRARIES ARE ALLOWED (e.g. zod, hookform)
+ENSURE THE COMPONENT IS BEAUTIFUL AND FULLY FUNCTIONAL`;
 
   return dedent(systemPrompt);
 }

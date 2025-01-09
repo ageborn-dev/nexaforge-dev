@@ -159,27 +159,121 @@ const ChatInterface: React.FC<ChatInterfaceProps> = ({
 
   const createContextualPrompt = useCallback(
     (userRequest: string, code: string, originalPrompt: string, lastError: string | null): string => {
-      return `As an expert React developer, I need your help with the following:
-
-Current Error: ${lastError || "No specific error, but code needs improvement"}
-
-Original App Requirements: "${originalPrompt}"
-
-Current Code:
-${code}
-
-User Request: ${userRequest}
-
-Please provide a complete, working solution that:
-1. Fixes any syntax errors or React-specific issues
-2. Maintains proper TypeScript types
-3. Ensures all required imports are present
-4. Uses appropriate React hooks and patterns
-5. Maintains consistent style and formatting
-6. Includes error boundaries where needed
-7. Properly handles edge cases
-
-Return the complete, corrected React component code with all necessary imports.`;
+      // Parse complex error messages into structured format
+      const parseError = (error: string) => {
+        const syntaxErrorMatch = error.match(/SyntaxError:(.*?)\n/s);
+        const lineColMatch = error.match(/\((\d+):(\d+)\)/);
+        const codeSnippetMatch = error.match(/(?:\n\s*\d+ \|.*){2,4}/);
+        
+        return {
+          message: syntaxErrorMatch ? syntaxErrorMatch[1].trim() : error,
+          line: lineColMatch ? parseInt(lineColMatch[1]) : null,
+          column: lineColMatch ? parseInt(lineColMatch[2]) : null,
+          snippet: codeSnippetMatch ? codeSnippetMatch[0].trim() : '',
+          fullError: error
+        };
+      };
+  
+      // Generate targeted fix instructions based on error type
+      const getErrorSpecificInstructions = (error: string) => {
+        const parsedError = parseError(error);
+        const instructions = [];
+  
+        if (error.includes('SyntaxError')) {
+          instructions.push(
+            "- Fix the syntax error in the component",
+            "- Ensure proper JSX formatting and tag closure",
+            "- Validate attribute syntax and values",
+            `- Pay special attention to line ${parsedError.line || 'with error'}`
+          );
+        } else if (error.includes('TypeError')) {
+          instructions.push(
+            "- Fix type-related issues in the component",
+            "- Ensure proper prop types and interfaces",
+            "- Validate null/undefined handling",
+            "- Check object property access"
+          );
+        } else if (error.includes('ReferenceError')) {
+          instructions.push(
+            "- Fix undefined variable references",
+            "- Verify all required imports are present",
+            "- Check variable scope and declarations",
+            "- Validate hook usage rules"
+          );
+        } else {
+          instructions.push(
+            "- Review and fix the component structure",
+            "- Ensure proper React patterns are followed",
+            "- Validate component logic and data flow",
+            "- Check for potential runtime issues"
+          );
+        }
+  
+        return instructions.join('\n');
+      };
+  
+      let errorContext = '';
+      if (lastError) {
+        const parsedError = parseError(lastError);
+        errorContext = `
+  Current Error Details:
+  ${parsedError.message}
+  ${parsedError.line ? `At Line: ${parsedError.line}${parsedError.column ? `, Column: ${parsedError.column}` : ''}` : ''}
+  ${parsedError.snippet ? `\nProblematic Code Section:\n${parsedError.snippet}` : ''}
+  
+  Required Fixes:
+  ${getErrorSpecificInstructions(lastError)}
+  
+  Special Instructions:
+  1. Maintain existing imports and component structure
+  2. Preserve all working functionality
+  3. Focus on fixing the identified error
+  4. Ensure proper TypeScript types
+  5. Follow React best practices
+  `;
+      }
+  
+      const basePrompt = `As a React and TypeScript expert, please help improve this code:
+  
+  ${errorContext}
+  
+  Original Requirements:
+  ${originalPrompt}
+  
+  Current Complete Code:
+  ${code}
+  
+  User Request:
+  ${userRequest}
+  
+  Technical Requirements:
+  1. Return a complete, working React TypeScript component
+  2. Include ALL necessary imports at the top
+  3. Maintain proper component structure and exports
+  4. Use appropriate TypeScript types and interfaces
+  5. Follow React hooks rules and best practices
+  6. Implement proper error handling and null checks
+  7. Use consistent code formatting
+  8. Ensure all JSX is properly formatted and closed
+  9. Maintain existing functionality while fixing issues
+  10. Include proper prop types and interfaces
+  
+  Format Requirements:
+  - Start the response with imports
+  - Include the complete component code
+  - Use proper TypeScript syntax
+  - Do not include any explanations or markdown
+  - Provide only the working code
+  - Ensure the code can be used as-is
+  
+  Additional Context:
+  - Framework: React 18+ with TypeScript
+  - Style: Tailwind CSS
+  - Package Manager: npm/yarn
+  - Environment: Next.js application
+  `;
+  
+      return basePrompt.trim();
     },
     []
   );

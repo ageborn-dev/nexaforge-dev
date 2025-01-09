@@ -106,6 +106,18 @@ export default function Footer() {
               className="object-contain opacity-80 transition-opacity hover:opacity-100"
             />
           </div>
+
+          {/* Ollama */}
+          <div className="group relative h-[28px] w-[80px]" title="Deepseek Coder">
+            <Image
+              src="/ollama-logo.png"
+              alt="Ollama"
+              fill
+              sizes="60px"
+              className="object-contain opacity-80 transition-opacity hover:opacity-100"
+            />
+          </div>
+
         </div>
       </div>
 

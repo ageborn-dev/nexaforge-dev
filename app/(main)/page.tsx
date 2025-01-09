@@ -3,12 +3,23 @@
 import { useScrollTo } from "@/hooks/use-scroll-to";
 import { CheckIcon } from "@heroicons/react/16/solid";
 import { ChevronDownIcon } from "@heroicons/react/20/solid";
-import { Sparkles, Wand2, ChevronRight, Settings2 } from "lucide-react";
+import {
+  Sparkles,
+  Wand2,
+  ChevronRight,
+  Settings2,
+  Loader2,
+} from "lucide-react";
 import * as Select from "@radix-ui/react-select";
-import { AnimatePresence, motion } from "framer-motion";
+import { motion } from "framer-motion";
 import { FormEvent, useEffect, useState, useMemo } from "react";
 import LoadingDots from "@/components/loading-dots";
-import { AI_PROVIDERS, ENABLED_PROVIDERS } from "@/config/ai-providers";
+import {
+  AI_PROVIDERS,
+  ENABLED_PROVIDERS,
+  initializeOllamaModels,
+  getModelFullName,
+} from "@/config/ai-providers";
 import CodeViewer from "@/components/code-viewer";
 import AnalyticsWindow from "@/components/AnalyticsWindow";
 import ErrorFixer from "@/components/ErrorFixer";
@@ -16,6 +27,7 @@ import SpinnerLoader from "@/components/SpinnerLoader";
 import AISettingsPanel from "@/components/AISettingsPanel";
 import ChatInterface from "@/components/ChatInterface";
 import SavedGenerations from "@/components/SavedGenerations";
+import { fetchOllamaModels } from "@/utils/ollama";
 
 type Status =
   | "initial"
@@ -100,30 +112,59 @@ const getDefaultSettings = (provider: string): AISettings => ({
 });
 
 export default function Home() {
-  const groupedModels = Object.entries(AI_PROVIDERS)
-    .filter(
-      ([provider]) =>
-        ENABLED_PROVIDERS[provider as keyof typeof ENABLED_PROVIDERS],
-    )
-    .map(([provider, models]) => ({
-      provider,
-      models: models.map((model) => ({
-        label: model.name,
-        value: model.id,
-      })),
-    }));
+  const [isModelInitialized, setIsModelInitialized] = useState(false);
+  const [ollamaModels, setOllamaModels] = useState<OllamaModel[]>([]);
+
+  // Initialize Ollama models
+  useEffect(() => {
+    async function initializeModels() {
+      try {
+        await initializeOllamaModels();
+        const models = await fetchOllamaModels();
+        setOllamaModels(models);
+      } catch (error) {
+        console.error("Ollama initialization error:", error);
+      } finally {
+        setIsModelInitialized(true);
+      }
+    }
+
+    initializeModels();
+  }, []);
+
+  const groupedModels = useMemo(() => {
+    if (!isModelInitialized) return [];
+
+    return Object.entries(AI_PROVIDERS)
+      .filter(
+        ([provider]) =>
+          ENABLED_PROVIDERS[provider as keyof typeof ENABLED_PROVIDERS],
+      )
+      .map(([provider, models]) => ({
+        provider,
+        models: models.map((model) => ({
+          label: provider === "ollama" ? model.name : model.name,
+          value: model.id,
+        })),
+      }));
+  }, [isModelInitialized, ollamaModels]);
 
   // Component states
   const [status, setStatus] = useState<Status>("initial");
   const [prompt, setPrompt] = useState("");
   const [generatedCode, setGeneratedCode] = useState("");
-  const [tokenAnalytics, setTokenAnalytics] = useState<CumulativeTokenAnalytics | null>(null);
+  const [tokenAnalytics, setTokenAnalytics] =
+    useState<CumulativeTokenAnalytics | null>(null);
   const [showAnalytics, setShowAnalytics] = useState(false);
   const [runtimeError, setRuntimeError] = useState<string | null>(null);
   const [model, setModel] = useState(groupedModels[0]?.models[0]?.value || "");
   const [ref, scrollTo] = useScrollTo();
-  const [messages, setMessages] = useState<{ role: string; content: string }[]>([]);
-  const [currentGeneratedAppId, setCurrentGeneratedAppId] = useState<string | null>(null);
+  const [messages, setMessages] = useState<{ role: string; content: string }[]>(
+    [],
+  );
+  const [currentGeneratedAppId, setCurrentGeneratedAppId] = useState<
+    string | null
+  >(null);
 
   // Chat interface state
   const [chatVisible, setChatVisible] = useState(false);
@@ -147,27 +188,36 @@ export default function Home() {
   );
 
   const updateTokenAnalytics = (newAnalytics: TokenAnalytics) => {
-    setTokenAnalytics(prevAnalytics => {
+    setTokenAnalytics((prevAnalytics) => {
       if (!prevAnalytics) {
         return {
           ...newAnalytics,
           cumulativePromptTokens: newAnalytics.promptTokens,
           cumulativeResponseTokens: newAnalytics.responseTokens,
           cumulativeTotalTokens: newAnalytics.totalTokens,
-          utilizationPercentage: ((newAnalytics.totalTokens / newAnalytics.maxTokens) * 100).toFixed(2)
+          utilizationPercentage: (
+            (newAnalytics.totalTokens / newAnalytics.maxTokens) *
+            100
+          ).toFixed(2),
         };
       }
 
-      const cumulativePromptTokens = prevAnalytics.cumulativePromptTokens + newAnalytics.promptTokens;
-      const cumulativeResponseTokens = prevAnalytics.cumulativeResponseTokens + newAnalytics.responseTokens;
-      const cumulativeTotalTokens = cumulativePromptTokens + cumulativeResponseTokens;
+      const cumulativePromptTokens =
+        prevAnalytics.cumulativePromptTokens + newAnalytics.promptTokens;
+      const cumulativeResponseTokens =
+        prevAnalytics.cumulativeResponseTokens + newAnalytics.responseTokens;
+      const cumulativeTotalTokens =
+        cumulativePromptTokens + cumulativeResponseTokens;
 
       return {
         ...newAnalytics,
         cumulativePromptTokens,
         cumulativeResponseTokens,
         cumulativeTotalTokens,
-        utilizationPercentage: ((cumulativeTotalTokens / newAnalytics.maxTokens) * 100).toFixed(2)
+        utilizationPercentage: (
+          (cumulativeTotalTokens / newAnalytics.maxTokens) *
+          100
+        ).toFixed(2),
       };
     });
     setShowAnalytics(true);
@@ -175,7 +225,6 @@ export default function Home() {
 
   let loading = status !== "initial" && status !== "created";
 
-  // Effect for updating settings when model changes
   useEffect(() => {
     if (currentProvider) {
       setAISettings((prev) => ({
@@ -204,6 +253,12 @@ export default function Home() {
     }
   }, [loading, generatedCode]);
 
+  const getApiModelName = (selectedModel: string) => {
+    return currentProvider === "ollama"
+      ? getModelFullName(selectedModel)
+      : selectedModel;
+  };
+
   async function handleChatMessage(message: string) {
     if (!generatedCode || status !== "created") return;
 
@@ -214,11 +269,12 @@ export default function Home() {
         { role: "user", content: message },
       ];
 
+      const currentModelName = getApiModelName(model);
       const res = await fetch("/api/generateCode", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          model,
+          model: currentModelName,
           messages: [
             { role: "system", content: "Previous code: " + generatedCode },
             ...updatedMessages,
@@ -246,16 +302,15 @@ export default function Home() {
       setRefinementMessages(updatedMessages);
       setStatus("created");
 
-      // Include generatedAppId in analytics if available
       if (currentGeneratedAppId) {
         const analyticsRes = await fetch("/api/tokenAnalytics", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
-            model,
+            model: currentModelName,
             prompt: message,
             generatedCode: receivedData,
-            generatedAppId: currentGeneratedAppId
+            generatedAppId: currentGeneratedAppId,
           }),
         });
 
@@ -273,13 +328,18 @@ export default function Home() {
   async function generateAppIdea() {
     if (status !== "initial") return;
 
+    console.log("=== Frontend Debug ===");
+    console.log("Current model:", model);
+    console.log("Provider:", currentProvider);
+    console.log("AI_PROVIDERS.ollama:", AI_PROVIDERS.ollama);
+
     setStatus("brainstorming");
     try {
       const res = await fetch("/api/generateIdea", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          model,
+          model: getApiModelName(model),
           settings: aiSettings,
         }),
       });
@@ -315,7 +375,7 @@ export default function Home() {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          model,
+          model: getApiModelName(model),
           prompt,
           settings: aiSettings,
         }),
@@ -355,13 +415,14 @@ export default function Home() {
     setRefinementMessages([]);
 
     setMessages([{ role: "user", content: prompt }]);
-    
+
     try {
+      const currentModelName = getApiModelName(model);
       const res = await fetch("/api/generateCode", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          model,
+          model: currentModelName,
           messages: [{ role: "user", content: prompt }],
           settings: aiSettings,
         }),
@@ -373,22 +434,30 @@ export default function Home() {
 
       const reader = res.body.getReader();
       let receivedData = "";
+      let ollamaResponseData = "";
 
       while (true) {
-        const { done, value } = await reader.read();
-        if (done) break;
+      const { done, value } = await reader.read();
+      if (done) break;
 
-        receivedData += new TextDecoder().decode(value);
-        const cleanedData = removeCodeFormatting(receivedData);
-        setGeneratedCode(cleanedData);
+      const chunk = new TextDecoder().decode(value);
+      receivedData += chunk;
+      
+      // Store raw response for Ollama analytics
+      if (currentProvider === "ollama") {
+        ollamaResponseData += chunk;
       }
 
-      // Save generated app first
+      const cleanedData = removeCodeFormatting(receivedData);
+      setGeneratedCode(cleanedData);
+    }
+
+      // Save generated app
       const generatedAppResponse = await fetch("/api/generated-apps", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          model,
+          model: currentModelName,
           prompt,
           code: receivedData,
         }),
@@ -406,10 +475,11 @@ export default function Home() {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          model,
+          model: currentModelName,
           prompt,
           generatedCode: receivedData,
-          generatedAppId: generatedApp.id
+          generatedAppId: generatedApp.id,
+          ...(currentProvider === "ollama" && { ollamaResponse: ollamaResponseData }),
         }),
       });
 
@@ -436,7 +506,7 @@ export default function Home() {
     setStatus("created");
     setChatVisible(true);
     scrollTo({ delay: 0.5 });
-};
+  };
 
   return (
     <main className="mt-12 flex w-full flex-1 flex-col items-center px-4 text-center sm:mt-1">
@@ -475,7 +545,7 @@ export default function Home() {
                   value={prompt}
                   onChange={(e) => setPrompt(e.target.value)}
                   name="prompt"
-                  className="w-full resize-none rounded-l-3xl bg-transparent px-6 py-5 text-lg text-gray-800 placeholder:text-gray-600 focus:border-transparent focus:outline-none focus:ring-2 focus:ring-cyan-300 whitespace-normal break-words min-h-[100px]"
+                  className="min-h-[100px] w-full resize-none whitespace-normal break-words rounded-l-3xl bg-transparent px-6 py-5 text-lg text-gray-800 placeholder:text-gray-600 focus:border-transparent focus:outline-none focus:ring-2 focus:ring-cyan-300"
                   placeholder={
                     status === "brainstorming"
                       ? "Generating idea..."
@@ -599,7 +669,7 @@ export default function Home() {
         </motion.div>
       )}
 
-{status === "created" && (
+      {status === "created" && (
         <>
           <hr className="border-1 mb-20 mt-8 h-px bg-gray-700 dark:bg-gray-700/30" />
           <motion.div
@@ -657,10 +727,7 @@ export default function Home() {
         onAnalyticsUpdate={(analytics) => updateTokenAnalytics(analytics)}
       />
 
-      <AnalyticsWindow 
-        analytics={tokenAnalytics} 
-        visible={showAnalytics} 
-      />
+      <AnalyticsWindow analytics={tokenAnalytics} visible={showAnalytics} />
 
       <AISettingsPanel
         visible={showSettings}

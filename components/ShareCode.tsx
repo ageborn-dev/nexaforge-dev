@@ -1,9 +1,9 @@
 // components/ShareCode.tsx
 
-import React, { useState } from 'react';
-import { Share2, Check, Copy, Link, Clock, Lock, Eye } from 'lucide-react';
-import * as Popover from '@radix-ui/react-popover';
-import * as Switch from '@radix-ui/react-switch';
+import React, { useState } from "react";
+import { Share2, Check, Copy, Link, Clock, Lock, Eye } from "lucide-react";
+import * as Popover from "@radix-ui/react-popover";
+import * as Switch from "@radix-ui/react-switch";
 
 interface ShareCodeProps {
   code: string;
@@ -23,10 +23,10 @@ const ShareCode: React.FC<ShareCodeProps> = ({
   code,
   prompt,
   model,
-  settings
+  settings,
 }) => {
   const [copied, setCopied] = useState(false);
-  const [shareUrl, setShareUrl] = useState<string>('');
+  const [shareUrl, setShareUrl] = useState<string>("");
   const [isLoading, setIsLoading] = useState(false);
   const [shareOptions, setShareOptions] = useState<ShareOptions>({});
   const [showAdvanced, setShowAdvanced] = useState(false);
@@ -34,22 +34,22 @@ const ShareCode: React.FC<ShareCodeProps> = ({
   const generateShareUrl = async () => {
     setIsLoading(true);
     try {
-      const response = await fetch('/api/share', {
-        method: 'POST',
+      const response = await fetch("/api/share", {
+        method: "POST",
         headers: {
-          'Content-Type': 'application/json',
+          "Content-Type": "application/json",
         },
         body: JSON.stringify({
           code,
           prompt,
           model,
           settings,
-          ...shareOptions
+          ...shareOptions,
         }),
       });
 
       if (!response.ok) {
-        throw new Error('Failed to generate share link');
+        throw new Error("Failed to generate share link");
       }
 
       const { id, qrCode } = await response.json();
@@ -57,7 +57,7 @@ const ShareCode: React.FC<ShareCodeProps> = ({
       setShareUrl(url);
       return { url, qrCode };
     } catch (error) {
-      console.error('Error generating share URL:', error);
+      console.error("Error generating share URL:", error);
       return null;
     } finally {
       setIsLoading(false);
@@ -70,7 +70,7 @@ const ShareCode: React.FC<ShareCodeProps> = ({
       setCopied(true);
       setTimeout(() => setCopied(false), 2000);
     } catch (err) {
-      console.error('Failed to copy:', err);
+      console.error("Failed to copy:", err);
     }
   };
 
@@ -92,7 +92,10 @@ const ShareCode: React.FC<ShareCodeProps> = ({
         </Popover.Trigger>
 
         <Popover.Portal>
-          <Popover.Content className="z-50 w-80 rounded-lg border border-white/20 bg-white/10 p-4 backdrop-blur-lg" sideOffset={5}>
+          <Popover.Content
+            className="z-50 w-80 rounded-lg border border-gray-400 bg-gray-800/70 p-4 shadow-md backdrop-blur-sm"
+            sideOffset={5}
+          >
             <div className="space-y-4">
               {/* Basic/Advanced Toggle */}
               <div className="flex items-center justify-between">
@@ -110,22 +113,27 @@ const ShareCode: React.FC<ShareCodeProps> = ({
                 <div className="space-y-4">
                   {/* Password Protection */}
                   <div className="space-y-2">
-                    <label className="flex items-center gap-2 text-sm text-white">
-                      <Lock className="h-4 w-4" />
+                    <label className="flex items-center gap-2 text-sm text-blue-400">
+                      <Lock className="h-4 w-4 text-blue-400" />
                       Password Protection
                     </label>
                     <input
                       type="password"
                       placeholder="Enter password..."
-                      className="w-full rounded-lg bg-white/5 px-3 py-2 text-sm text-white placeholder:text-white/50"
-                      onChange={(e) => setShareOptions(prev => ({...prev, password: e.target.value}))}
+                      className="w-full rounded-lg bg-white px-3 py-2 text-sm text-gray-800 placeholder:text-gray-500"
+                      onChange={(e) =>
+                        setShareOptions((prev) => ({
+                          ...prev,
+                          password: e.target.value,
+                        }))
+                      }
                     />
                   </div>
 
                   {/* Expiration */}
                   <div className="space-y-2">
-                    <label className="flex items-center gap-2 text-sm text-white">
-                      <Clock className="h-4 w-4" />
+                    <label className="flex items-center gap-2 text-sm text-blue-400">
+                      <Clock className="h-4 w-4 text-blue-400" />
                       Expires After (hours)
                     </label>
                     <input
@@ -133,23 +141,33 @@ const ShareCode: React.FC<ShareCodeProps> = ({
                       min="1"
                       max="168"
                       placeholder="Never"
-                      className="w-full rounded-lg bg-white/5 px-3 py-2 text-sm text-white placeholder:text-white/50"
-                      onChange={(e) => setShareOptions(prev => ({...prev, expiresIn: parseInt(e.target.value)}))}
+                      className="w-full rounded-lg bg-white px-3 py-2 text-sm text-gray-800 placeholder:text-gray-500"
+                      onChange={(e) =>
+                        setShareOptions((prev) => ({
+                          ...prev,
+                          expiresIn: parseInt(e.target.value),
+                        }))
+                      }
                     />
                   </div>
 
                   {/* View Limit */}
                   <div className="space-y-2">
-                    <label className="flex items-center gap-2 text-sm text-white">
-                      <Eye className="h-4 w-4" />
+                    <label className="flex items-center gap-2 text-sm text-blue-400">
+                      <Eye className="h-4 w-4 text-blue-400" />
                       View Limit
                     </label>
                     <input
                       type="number"
                       min="1"
                       placeholder="Unlimited"
-                      className="w-full rounded-lg bg-white/5 px-3 py-2 text-sm text-white placeholder:text-white/50"
-                      onChange={(e) => setShareOptions(prev => ({...prev, allowedViews: parseInt(e.target.value)}))}
+                      className="w-full rounded-lg bg-white px-3 py-2 text-sm text-gray-800 placeholder:text-gray-500"
+                      onChange={(e) =>
+                        setShareOptions((prev) => ({
+                          ...prev,
+                          allowedViews: parseInt(e.target.value),
+                        }))
+                      }
                     />
                   </div>
                 </div>

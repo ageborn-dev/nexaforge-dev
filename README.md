@@ -7,13 +7,6 @@
   Transform your ideas into code using multiple AI models. Built on the foundation of GeminiCoder, enhanced with powerful new features.
 </p>
 
-<div align="center">
-  <a href="https://nexaforge.example.com">Try it live</a>
-  <p align="center">
-    Soon live.
-  </p>
-</div>
-
 ## Overview
 
 NexaForge is a powerful web application that allows you to generate functional applications from natural language descriptions. This project is a significant enhancement of [GeminiCoder](https://github.com/osanseviero/geminicoder), adding multiple AI model support and advanced features while maintaining the core simplicity.
@@ -25,6 +18,7 @@ NexaForge is a powerful web application that allows you to generate functional a
   - Anthropic Claude
   - OpenAI GPT
   - DeepSeek
+  - Ollama
 
 - **Enhanced Development Features**:
   - Real-time code generation with streaming support
@@ -56,6 +50,7 @@ NexaForge is a powerful web application that allows you to generate functional a
     - Claude API
     - OpenAI API
     - DeepSeek API
+    - Ollama API
 
 ## 🚀 Getting Started
 
@@ -88,6 +83,8 @@ The application supports customizable settings for each AI model:
 - Frequency penalty
 - Presence penalty
 
+> **Note:** Each provider and model in the settings section is equipped with help tooltips to guide users through configuration options and explain parameter functionalities.
+
 ## 🎯 Features in Detail
 
 ### Code Generation
@@ -110,6 +107,39 @@ The application supports customizable settings for each AI model:
 - Save generations
 - Load previous projects
 - Export functionality
+
+## 🌟 Ollama Support
+
+With the latest integration of Ollama, you can now leverage powerful LLaMA-based models optimized for conversational and generative tasks. NexaForge automatically detects available Ollama models and integrates them seamlessly into your workflow.
+
+### Benefits of Ollama Integration:
+- Access to fine-tuned LLaMA models for code generation and conversational tasks.
+- Enhanced multi-model capability, allowing dynamic model switching.
+- Efficient handling of large-scale tasks with state-of-the-art performance.
+
+### Installing and Using Ollama:
+1. **Install Ollama CLI:**
+   - Follow the official installation guide at [Ollama CLI](https://ollama.com/docs/cli/installation).
+
+2. **Run the Ollama Service:**
+   ```bash
+   ollama start
+   ```
+   This command will start the Ollama server on your local machine, making its models accessible to NexaForge.
+
+3. **Add Models:**
+   Use the Ollama CLI to download and manage models:
+   ```bash
+   ollama pull <model-name>
+   ```
+   Example:
+   ```bash
+   ollama pull llama-7b
+   ```
+
+4. **Integration with NexaForge:**
+   - NexaForge automatically detects and loads models from the running Ollama server.
+   - Simply ensure the Ollama server is running, and NexaForge will utilize the available models dynamically.
 
 ## 🙏 Acknowledgments
 

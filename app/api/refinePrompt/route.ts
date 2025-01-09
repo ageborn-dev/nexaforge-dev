@@ -1,22 +1,20 @@
-// app/api/refinePrompt/route.ts
 import { z } from "zod";
 import { GoogleGenerativeAI } from "@google/generative-ai";
 import OpenAI from "openai";
 import Anthropic from "@anthropic-ai/sdk";
-import { AI_PROVIDERS } from "../../../config/ai-providers";
+import {
+  AI_PROVIDERS,
+  initializeOllamaModels,
+} from "../../../config/ai-providers";
+import { createOllamaRequest, handleOllamaStream } from "../../../utils/ollama";
 
 // Initialize API clients
 const googleApiKey = process.env.GOOGLE_API_KEY || "";
 const genAI = new GoogleGenerativeAI(googleApiKey);
-
-const openai = new OpenAI({
-  apiKey: process.env.OPENAI_API_KEY || "",
-});
-
+const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY || "" });
 const anthropic = new Anthropic({
   apiKey: process.env.ANTHROPIC_API_KEY || "",
 });
-
 const deepseek = new OpenAI({
   baseURL: "https://api.deepseek.com/v1",
   apiKey: process.env.DEEPSEEK_API_KEY || "",
@@ -58,6 +56,20 @@ export async function POST(req: Request) {
   let { model, prompt } = result.data;
   const refinementPrompt = `Please refine and improve this app idea prompt to be more specific and detailed: "${prompt}"`;
 
+  await initializeOllamaModels();
+
+  console.log("=== Model Validation Debug ===");
+  console.log("Received model:", model);
+  console.log("AI_PROVIDERS after init:", {
+    providers: Object.keys(AI_PROVIDERS),
+    ollamaModels: AI_PROVIDERS.ollama.map((m) => ({ id: m.id, name: m.name })),
+  });
+  console.log(
+    "Model exists in Ollama:",
+    AI_PROVIDERS.ollama.some((m) => m.id === model),
+  );
+
+  
   // Find provider based on model ID
   const providerEntry = Object.entries(AI_PROVIDERS).find(([_, models]) =>
     models.some((m) => m.id === model),
@@ -155,6 +167,31 @@ export async function POST(req: Request) {
                 );
               }
             }
+            controller.close();
+          },
+        });
+        break;
+
+      case "ollama":
+        
+        const ollamaResponse = await fetch(
+          "http://localhost:11434/api/generate",
+          createOllamaRequest(model, systemPrompt + "\n\n" + refinementPrompt, {
+            temperature: 0.7,
+            topP: 1,
+            maxTokens: 1000,
+          }),
+        );
+
+        if (!ollamaResponse.ok) {
+          const errorData = await ollamaResponse.text();
+          console.error("Ollama error:", errorData);
+          throw new Error(`Ollama API request failed: ${errorData}`);
+        }
+
+        stream = new ReadableStream({
+          async start(controller) {
+            await handleOllamaStream(ollamaResponse, controller, encoder);
             controller.close();
           },
         });
