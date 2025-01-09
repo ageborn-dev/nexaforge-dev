@@ -10,6 +10,7 @@
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.33.1",
+    "@babel/parser": "^7.26.3",
     "@codesandbox/sandpack-react": "^2.18.2",
     "@codesandbox/sandpack-themes": "^2.0.21",
     "@conform-to/zod": "^1.1.5",
