@@ -19,6 +19,15 @@ interface PageProps {
   searchParams?: Record<string, string>;
 }
 
+// Define SharedCode type
+interface SharedCode {
+  appId: string;
+  content: string;
+  isEncrypted: boolean;
+  expiresAt: Date | null;
+  remainingViews: number | null;
+}
+
 // Cache the database query
 const getGeneratedAppByID = cache(async (id: string) => {
   const generatedApp = await client.generatedApp.findUnique({
@@ -84,7 +93,7 @@ export default async function Page({ params, searchParams }: PageProps) {
   }
 
   // Query shared code data
-  const sharedCode = await client.$queryRaw`
+  const sharedCode = await client.$queryRaw<SharedCode[]>`
     SELECT * FROM "SharedCode" WHERE "appId" = ${id}
   `;
 
@@ -112,7 +121,7 @@ export default async function Page({ params, searchParams }: PageProps) {
     }
 
     // Handle view limits
-    if (shareData.remainingViews !== null && sharedCode.remainingViews <= 0) {
+    if (shareData.remainingViews !== null && shareData.remainingViews <= 0) {
       return <div>Maximum views reached</div>;
     }
 
