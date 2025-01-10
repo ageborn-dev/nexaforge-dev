@@ -7,13 +7,6 @@
   Transform your ideas into code using multiple AI models. Built on the foundation of GeminiCoder, enhanced with powerful new features.
 </p>
 
-<div align="center">
-  <a href="https://nexaforge.example.com">Try it live</a>
-  <p align="center">
-    Soon live.
-  </p>
-</div>
-
 
 ## Overview
 
