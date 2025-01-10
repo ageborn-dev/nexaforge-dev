@@ -17,6 +17,14 @@ interface PageProps {
   searchParams?: { [key: string]: string };
 }
 
+// Define PageProps type
+interface PageProps {
+  params: {
+    id: string;
+  };
+  searchParams?: Record<string, string>;
+}
+
 // Cache the database query
 const getGeneratedAppByID = cache(async (id: string) => {
   const generatedApp = await client.generatedApp.findUnique({
@@ -43,7 +51,11 @@ async function generateQRCode(url: string): Promise<string | null> {
 }
 
 // Metadata generation
+<<<<<<< HEAD
 export async function generateMetadata({ params }: { params: { id: string } }): Promise<Metadata> {
+=======
+export async function generateMetadata({ params }: PageProps): Promise<Metadata> {
+>>>>>>> da2285e1d2be1726d980562ba606cb0ce24f00c0
   const generatedApp = await getGeneratedAppByID(params.id);
 
   if (!generatedApp?.prompt || typeof generatedApp.prompt !== "string") {
@@ -99,7 +111,11 @@ export default async function Page({ params, searchParams }: PageProps) {
         const decrypted = await decrypt(shareData.content, key);
         generatedApp.code = JSON.parse(decrypted).code;
       } catch (error) {
+<<<<<<< HEAD
         console.error("Decryption failed:", error);
+=======
+        console.error('Decryption failed:', error);
+>>>>>>> da2285e1d2be1726d980562ba606cb0ce24f00c0
         return redirect(`/share/${id}/protected?error=invalid`);
       }
     }
