@@ -36,15 +36,12 @@ async function generateQRCode(url: string): Promise<string | null> {
   }
 }
 
-type Props = {
-  params: { id: string };
-  searchParams: { [key: string]: string | undefined };
-}
-
 // Metadata generation
 export async function generateMetadata({
   params,
-}: Props): Promise<Metadata> {
+}: {
+  params: { id: string }
+}): Promise<Metadata> {
   const generatedApp = await getGeneratedAppByID(params.id);
 
   if (!generatedApp?.prompt || typeof generatedApp.prompt !== "string") {
@@ -63,10 +60,24 @@ export async function generateMetadata({
   };
 }
 
+interface PageParams {
+  id: string;
+}
+
+interface PageSearchParams {
+  [key: string]: string | string[] | undefined;
+}
+
 // Main page component
-const SharePage = async ({ params, searchParams }: Props) => {
-  const key = searchParams.key;
-  const qr = searchParams.qr;
+async function SharePage({
+  params,
+  searchParams,
+}: {
+  params: PageParams;
+  searchParams: PageSearchParams;
+}) {
+  const key = typeof searchParams.key === 'string' ? searchParams.key : undefined;
+  const qr = typeof searchParams.qr === 'string' ? searchParams.qr : undefined;
 
   const generatedApp = await getGeneratedAppByID(params.id);
 
