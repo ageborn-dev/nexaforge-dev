@@ -7,17 +7,8 @@ import { decrypt } from "@/lib/encryption";
 import QRCode from "qrcode";
 import Image from 'next/image';
 
-// Explicitly declare segment configuration
 export const dynamic = 'force-dynamic';
 export const runtime = 'nodejs';
-
-// Update PageProps to match Next.js expected types
-type PageProps = {
-  params: {
-    id: string;
-  };
-  searchParams: { [key: string]: string | string[] | undefined };
-};
 
 // Define SharedCode type
 interface SharedCode {
@@ -53,11 +44,16 @@ async function generateQRCode(url: string): Promise<string | null> {
   }
 }
 
-// Update metadata function signature to match Next.js types
+type GenerateMetadataProps = {
+  params: { id: string };
+  searchParams: { [key: string]: string | undefined };
+}
+
+// Metadata generation
 export async function generateMetadata(
-  props: PageProps
+  { params }: GenerateMetadataProps
 ): Promise<Metadata> {
-  const generatedApp = await getGeneratedAppByID(props.params.id);
+  const generatedApp = await getGeneratedAppByID(params.id);
 
   if (!generatedApp?.prompt || typeof generatedApp.prompt !== "string") {
     notFound();
@@ -75,18 +71,22 @@ export async function generateMetadata(
   };
 }
 
-// Main page component with updated type signature
-export default async function Page(props: PageProps) {
-  const { id } = props.params;
-  const { key, qr } = props.searchParams;
+interface PageContent {
+  code: string;
+  qrCodeDataUrl?: string | null;
+}
 
+async function getPageContent(
+  id: string,
+  key?: string,
+  qr?: string
+): Promise<PageContent | JSX.Element> {
   const generatedApp = await getGeneratedAppByID(id);
 
   if (!generatedApp) {
     return <div>App not found</div>;
   }
 
-  // Generate QR code if requested
   let qrCodeDataUrl: string | null = null;
   if (qr === 'true') {
     qrCodeDataUrl = await generateQRCode(
@@ -94,7 +94,6 @@ export default async function Page(props: PageProps) {
     );
   }
 
-  // Query shared code data
   const sharedCode = await client.$queryRaw<SharedCode[]>`
     SELECT * FROM "SharedCode" WHERE "appId" = ${id}
   `;
@@ -102,9 +101,8 @@ export default async function Page(props: PageProps) {
   if (sharedCode && Array.isArray(sharedCode) && sharedCode.length > 0) {
     const shareData = sharedCode[0];
     
-    // Handle encrypted content
     if (shareData.isEncrypted && !key) {
-      return redirect(`/share/${id}/protected`);
+      redirect(`/share/${id}/protected`);
     }
 
     if (shareData.isEncrypted && key) {
@@ -113,21 +111,18 @@ export default async function Page(props: PageProps) {
         generatedApp.code = JSON.parse(decrypted).code;
       } catch (error) {
         console.error('Decryption failed:', error);
-        return redirect(`/share/${id}/protected?error=invalid`);
+        redirect(`/share/${id}/protected?error=invalid`);
       }
     }
 
-    // Check expiration
     if (shareData.expiresAt && new Date(shareData.expiresAt) < new Date()) {
       return <div>Share link expired</div>;
     }
 
-    // Handle view limits
     if (shareData.remainingViews !== null && shareData.remainingViews <= 0) {
       return <div>Maximum views reached</div>;
     }
 
-    // Decrement remaining views if applicable
     if (shareData.remainingViews !== null) {
       await client.$executeRaw`
         UPDATE "SharedCode" 
@@ -137,12 +132,35 @@ export default async function Page(props: PageProps) {
     }
   }
 
+  return {
+    code: generatedApp.code,
+    qrCodeDataUrl
+  };
+}
+
+export default async function Page({
+  params,
+  searchParams,
+}: {
+  params: { id: string };
+  searchParams: { [key: string]: string | string[] | undefined };
+}) {
+  const content = await getPageContent(
+    params.id,
+    searchParams.key as string | undefined,
+    searchParams.qr as string | undefined
+  );
+
+  if ('type' in content) {
+    return content;
+  }
+
   return (
     <div>
-      {qrCodeDataUrl && (
+      {content.qrCodeDataUrl && (
         <div className="mb-4">
           <Image 
-            src={qrCodeDataUrl} 
+            src={content.qrCodeDataUrl} 
             alt="QR Code" 
             width={400} 
             height={400}
@@ -150,7 +168,7 @@ export default async function Page(props: PageProps) {
           />
         </div>
       )}
-      <CodeViewer code={generatedApp.code} model={""} prompt={""} />
+      <CodeViewer code={content.code} model={""} prompt={""} />
     </div>
   );
 }
