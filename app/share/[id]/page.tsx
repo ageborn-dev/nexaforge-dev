@@ -5,11 +5,17 @@ import type { Metadata } from "next";
 import { cache } from "react";
 import { decrypt } from "@/lib/encryption";
 import QRCode from "qrcode";
-import Image from 'next/image';
+import Image from "next/image";
 
 // Explicitly declare segment configuration
-export const dynamic = 'force-dynamic';
-export const runtime = 'nodejs';
+export const dynamic = "force-dynamic";
+export const runtime = "nodejs";
+
+// Define PageProps type
+interface PageProps {
+  params: { id: string };
+  searchParams?: { [key: string]: string };
+}
 
 // Cache the database query
 const getGeneratedAppByID = cache(async (id: string) => {
@@ -26,25 +32,18 @@ async function generateQRCode(url: string): Promise<string | null> {
       width: 400,
       margin: 2,
       color: {
-        dark: '#000',
-        light: '#fff'
-      }
+        dark: "#000",
+        light: "#fff",
+      },
     });
   } catch (err) {
-    console.error('QR Code generation failed:', err);
+    console.error("QR Code generation failed:", err);
     return null;
   }
 }
 
-type Props = {
-  params: { id: string };
-  searchParams: { [key: string]: string | undefined };
-}
-
 // Metadata generation
-export async function generateMetadata({
-  params,
-}: Props): Promise<Metadata> {
+export async function generateMetadata({ params }: { params: { id: string } }): Promise<Metadata> {
   const generatedApp = await getGeneratedAppByID(params.id);
 
   if (!generatedApp?.prompt || typeof generatedApp.prompt !== "string") {
@@ -64,11 +63,11 @@ export async function generateMetadata({
 }
 
 // Main page component
-const SharePage = async ({ params, searchParams }: Props) => {
-  const key = searchParams.key;
-  const qr = searchParams.qr;
+export default async function Page({ params, searchParams }: PageProps) {
+  const { id } = params;
+  const { key, qr } = searchParams || {};
 
-  const generatedApp = await getGeneratedAppByID(params.id);
+  const generatedApp = await getGeneratedAppByID(id);
 
   if (!generatedApp) {
     return <div>App not found</div>;
@@ -76,23 +75,23 @@ const SharePage = async ({ params, searchParams }: Props) => {
 
   // Generate QR code if requested
   let qrCodeDataUrl: string | null = null;
-  if (qr === 'true') {
+  if (qr === "true") {
     qrCodeDataUrl = await generateQRCode(
-      `${process.env.NEXT_PUBLIC_BASE_URL}/share/${params.id}`
+      `${process.env.NEXT_PUBLIC_BASE_URL}/share/${id}`
     );
   }
 
   // Query shared code data
   const sharedCode = await client.$queryRaw`
-    SELECT * FROM "SharedCode" WHERE "appId" = ${params.id}
+    SELECT * FROM "SharedCode" WHERE "appId" = ${id}
   `;
 
   if (sharedCode && Array.isArray(sharedCode) && sharedCode.length > 0) {
     const shareData = sharedCode[0];
-    
+
     // Handle encrypted content
     if (shareData.isEncrypted && !key) {
-      return redirect(`/share/${params.id}/protected`);
+      return redirect(`/share/${id}/protected`);
     }
 
     if (shareData.isEncrypted && key) {
@@ -100,8 +99,8 @@ const SharePage = async ({ params, searchParams }: Props) => {
         const decrypted = await decrypt(shareData.content, key);
         generatedApp.code = JSON.parse(decrypted).code;
       } catch (error) {
-        console.error('Decryption failed:', error);
-        return redirect(`/share/${params.id}/protected?error=invalid`);
+        console.error("Decryption failed:", error);
+        return redirect(`/share/${id}/protected?error=invalid`);
       }
     }
 
@@ -111,7 +110,7 @@ const SharePage = async ({ params, searchParams }: Props) => {
     }
 
     // Handle view limits
-    if (shareData.remainingViews !== null && shareData.remainingViews <= 0) {
+    if (shareData.remainingViews !== null && sharedCode.remainingViews <= 0) {
       return <div>Maximum views reached</div>;
     }
 
@@ -120,7 +119,7 @@ const SharePage = async ({ params, searchParams }: Props) => {
       await client.$executeRaw`
         UPDATE "SharedCode" 
         SET "remainingViews" = "remainingViews" - 1 
-        WHERE "appId" = ${params.id}
+        WHERE "appId" = ${id}
       `;
     }
   }
@@ -129,10 +128,10 @@ const SharePage = async ({ params, searchParams }: Props) => {
     <div>
       {qrCodeDataUrl && (
         <div className="mb-4">
-          <Image 
-            src={qrCodeDataUrl} 
-            alt="QR Code" 
-            width={400} 
+          <Image
+            src={qrCodeDataUrl}
+            alt="QR Code"
+            width={400}
             height={400}
             className="mx-auto"
           />
@@ -142,5 +141,3 @@ const SharePage = async ({ params, searchParams }: Props) => {
     </div>
   );
 }
-
-export default SharePage;
