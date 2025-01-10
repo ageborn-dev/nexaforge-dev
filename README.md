@@ -90,14 +90,8 @@ Follow these step-by-step instructions to set up NexaForge, even if you're a beg
    This will download all necessary libraries and dependencies.
 
 5. **Create a `.env` File**:
-   - In the project root, create a file named `.env`.
+   - In the project root, rename the file `.env.example` to .env.
    - Add your API keys for supported providers:
-     ```env
-     GOOGLE_AI_API_KEY=
-     ANTHROPIC_API_KEY=
-     OPENAI_API_KEY=
-     DEEPSEEK_API_KEY=
-     ```
      > Note: Ollama does not require an API key but runs on your local server.
 
 6. **Start the Development Server**:
