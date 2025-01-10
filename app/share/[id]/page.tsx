@@ -6,7 +6,6 @@ import { cache } from "react";
 import { decrypt } from "@/lib/encryption";
 import QRCode from "qrcode";
 import Image from 'next/image';
-import { Params } from 'next/dist/shared/lib/router/utils/route-matcher';
 
 // Explicitly declare segment configuration
 export const dynamic = 'force-dynamic';
@@ -14,7 +13,9 @@ export const runtime = 'nodejs';
 
 // Define PageProps type
 interface PageProps {
-  params: Params;
+  params: {
+    id: string;
+  };
   searchParams?: Record<string, string>;
 }
 
@@ -44,8 +45,7 @@ async function generateQRCode(url: string): Promise<string | null> {
 }
 
 // Metadata generation
-export async function generateMetadata(props: Promise<PageProps>): Promise<Metadata> {
-  const { params } = await props; // Await params if it's treated as a Promise
+export async function generateMetadata({ params }: PageProps): Promise<Metadata> {
   const generatedApp = await getGeneratedAppByID(params.id);
 
   if (!generatedApp?.prompt || typeof generatedApp.prompt !== "string") {
@@ -65,8 +65,7 @@ export async function generateMetadata(props: Promise<PageProps>): Promise<Metad
 }
 
 // Main page component
-export default async function page(props: Promise<PageProps>) {
-  const { params, searchParams } = await props; // Await props to handle Promise-like behavior
+export default async function Page({ params, searchParams }: PageProps) {
   const { id } = params;
   const { key, qr } = searchParams || {};
 
@@ -113,7 +112,7 @@ export default async function page(props: Promise<PageProps>) {
     }
 
     // Handle view limits
-    if (shareData.remainingViews !== null && shareData.remainingViews <= 0) {
+    if (shareData.remainingViews !== null && sharedCode.remainingViews <= 0) {
       return <div>Maximum views reached</div>;
     }
 
