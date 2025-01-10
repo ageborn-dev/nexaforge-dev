@@ -60,26 +60,20 @@ export async function generateMetadata({
   };
 }
 
-interface PageParams {
-  id: string;
-}
-
-interface PageSearchParams {
-  [key: string]: string | string[] | undefined;
-}
-
 // Main page component
-async function SharePage({
-  params,
-  searchParams,
-}: {
-  params: PageParams;
-  searchParams: PageSearchParams;
-}) {
-  const key = typeof searchParams.key === 'string' ? searchParams.key : undefined;
-  const qr = typeof searchParams.qr === 'string' ? searchParams.qr : undefined;
+export default function SharePage() {
+  return SharePageContent();
+}
 
-  const generatedApp = await getGeneratedAppByID(params.id);
+// Content component that handles the async operations
+async function SharePageContent() {
+  // Get params and searchParams from URL
+  const url = new URL(window.location.href);
+  const id = url.pathname.split('/').pop() || '';
+  const key = url.searchParams.get('key');
+  const qr = url.searchParams.get('qr');
+
+  const generatedApp = await getGeneratedAppByID(id);
 
   if (!generatedApp) {
     return <div>App not found</div>;
@@ -89,13 +83,13 @@ async function SharePage({
   let qrCodeDataUrl: string | null = null;
   if (qr === 'true') {
     qrCodeDataUrl = await generateQRCode(
-      `${process.env.NEXT_PUBLIC_BASE_URL}/share/${params.id}`
+      `${process.env.NEXT_PUBLIC_BASE_URL}/share/${id}`
     );
   }
 
   // Query shared code data
   const sharedCode = await client.$queryRaw`
-    SELECT * FROM "SharedCode" WHERE "appId" = ${params.id}
+    SELECT * FROM "SharedCode" WHERE "appId" = ${id}
   `;
 
   if (sharedCode && Array.isArray(sharedCode) && sharedCode.length > 0) {
@@ -103,7 +97,7 @@ async function SharePage({
     
     // Handle encrypted content
     if (shareData.isEncrypted && !key) {
-      return redirect(`/share/${params.id}/protected`);
+      return redirect(`/share/${id}/protected`);
     }
 
     if (shareData.isEncrypted && key) {
@@ -112,7 +106,7 @@ async function SharePage({
         generatedApp.code = JSON.parse(decrypted).code;
       } catch (error) {
         console.error('Decryption failed:', error);
-        return redirect(`/share/${params.id}/protected?error=invalid`);
+        return redirect(`/share/${id}/protected?error=invalid`);
       }
     }
 
@@ -131,7 +125,7 @@ async function SharePage({
       await client.$executeRaw`
         UPDATE "SharedCode" 
         SET "remainingViews" = "remainingViews" - 1 
-        WHERE "appId" = ${params.id}
+        WHERE "appId" = ${id}
       `;
     }
   }
@@ -153,5 +147,3 @@ async function SharePage({
     </div>
   );
 }
-
-export default SharePage;
