@@ -8,7 +8,7 @@
 </p>
 
 <div align="center">
-  <a href="https://nexaforge-mu.vercel.app/">Try it live</a>
+  <a href="https://nexaforge-mu.vercel.app/" target="_blank">Try it live</a>
   <p align="center">
   </p>
 </div>
