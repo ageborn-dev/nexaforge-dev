@@ -6,6 +6,7 @@ import { cache } from "react";
 import { decrypt } from "@/lib/encryption";
 import QRCode from "qrcode";
 import Image from 'next/image';
+import { Params } from 'next/dist/shared/lib/router/utils/route-matcher';
 
 // Explicitly declare segment configuration
 export const dynamic = 'force-dynamic';
@@ -13,13 +14,8 @@ export const runtime = 'nodejs';
 
 // Define PageProps type
 interface PageProps {
-  params: {
-    id: string;
-  };
-  searchParams?: {
-    key?: string;
-    qr?: string;
-  };
+  params: Params;
+  searchParams?: Record<string, string>;
 }
 
 // Cache the database query
@@ -48,8 +44,9 @@ async function generateQRCode(url: string): Promise<string | null> {
 }
 
 // Metadata generation
-export async function generateMetadata(props: PageProps): Promise<Metadata> {
-  const generatedApp = await getGeneratedAppByID(props.params.id);
+export async function generateMetadata(props: Promise<PageProps>): Promise<Metadata> {
+  const { params } = await props; // Await params if it's treated as a Promise
+  const generatedApp = await getGeneratedAppByID(params.id);
 
   if (!generatedApp?.prompt || typeof generatedApp.prompt !== "string") {
     notFound();
@@ -68,9 +65,10 @@ export async function generateMetadata(props: PageProps): Promise<Metadata> {
 }
 
 // Main page component
-export default async function page(props: PageProps) {
-  const { id } = props.params;
-  const { key, qr } = props.searchParams || {};
+export default async function page(props: Promise<PageProps>) {
+  const { params, searchParams } = await props; // Await props to handle Promise-like behavior
+  const { id } = params;
+  const { key, qr } = searchParams || {};
 
   const generatedApp = await getGeneratedAppByID(id);
 
