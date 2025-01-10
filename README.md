@@ -7,6 +7,11 @@
   Transform your ideas into code using multiple AI models. Built on the foundation of GeminiCoder, enhanced with powerful new features.
 </p>
 
+<div align="center">
+  <a href="https://nexaforge-mu.vercel.app/">Try it live</a>
+  <p align="center">
+  </p>
+</div>
 
 ## Overview
 
