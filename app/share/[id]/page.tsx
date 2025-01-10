@@ -37,12 +37,8 @@ async function generateQRCode(url: string): Promise<string | null> {
 }
 
 // Metadata generation
-export async function generateMetadata({
-  params,
-}: {
-  params: { id: string }
-}): Promise<Metadata> {
-  const generatedApp = await getGeneratedAppByID(params.id);
+export async function generateMetadata(props: any): Promise<Metadata> {
+  const generatedApp = await getGeneratedAppByID(props.params.id);
 
   if (!generatedApp?.prompt || typeof generatedApp.prompt !== "string") {
     notFound();
@@ -61,17 +57,9 @@ export async function generateMetadata({
 }
 
 // Main page component
-export default function SharePage() {
-  return SharePageContent();
-}
-
-// Content component that handles the async operations
-async function SharePageContent() {
-  // Get params and searchParams from URL
-  const url = new URL(window.location.href);
-  const id = url.pathname.split('/').pop() || '';
-  const key = url.searchParams.get('key');
-  const qr = url.searchParams.get('qr');
+export default async function page(props: any) {
+  const { id } = props.params;
+  const { key, qr } = props.searchParams || {};
 
   const generatedApp = await getGeneratedAppByID(id);
 
