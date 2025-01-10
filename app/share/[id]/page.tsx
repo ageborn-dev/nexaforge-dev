@@ -11,13 +11,13 @@ import Image from 'next/image';
 export const dynamic = 'force-dynamic';
 export const runtime = 'nodejs';
 
-// Define PageProps type
-interface PageProps {
+// Update PageProps to match Next.js expected types
+type PageProps = {
   params: {
     id: string;
   };
-  searchParams?: Record<string, string>;
-}
+  searchParams: { [key: string]: string | string[] | undefined };
+};
 
 // Define SharedCode type
 interface SharedCode {
@@ -53,9 +53,11 @@ async function generateQRCode(url: string): Promise<string | null> {
   }
 }
 
-// Metadata generation
-export async function generateMetadata({ params }: PageProps): Promise<Metadata> {
-  const generatedApp = await getGeneratedAppByID(params.id);
+// Update metadata function signature to match Next.js types
+export async function generateMetadata(
+  props: PageProps
+): Promise<Metadata> {
+  const generatedApp = await getGeneratedAppByID(props.params.id);
 
   if (!generatedApp?.prompt || typeof generatedApp.prompt !== "string") {
     notFound();
@@ -73,10 +75,10 @@ export async function generateMetadata({ params }: PageProps): Promise<Metadata>
   };
 }
 
-// Main page component
-export default async function Page({ params, searchParams }: PageProps) {
-  const { id } = params;
-  const { key, qr } = searchParams || {};
+// Main page component with updated type signature
+export default async function Page(props: PageProps) {
+  const { id } = props.params;
+  const { key, qr } = props.searchParams;
 
   const generatedApp = await getGeneratedAppByID(id);
 
