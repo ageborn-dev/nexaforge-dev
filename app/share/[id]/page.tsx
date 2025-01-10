@@ -11,6 +11,17 @@ import Image from 'next/image';
 export const dynamic = 'force-dynamic';
 export const runtime = 'nodejs';
 
+// Define PageProps type
+interface PageProps {
+  params: {
+    id: string;
+  };
+  searchParams?: {
+    key?: string;
+    qr?: string;
+  };
+}
+
 // Cache the database query
 const getGeneratedAppByID = cache(async (id: string) => {
   const generatedApp = await client.generatedApp.findUnique({
@@ -37,7 +48,7 @@ async function generateQRCode(url: string): Promise<string | null> {
 }
 
 // Metadata generation
-export async function generateMetadata(props: any): Promise<Metadata> {
+export async function generateMetadata(props: PageProps): Promise<Metadata> {
   const generatedApp = await getGeneratedAppByID(props.params.id);
 
   if (!generatedApp?.prompt || typeof generatedApp.prompt !== "string") {
@@ -57,7 +68,7 @@ export async function generateMetadata(props: any): Promise<Metadata> {
 }
 
 // Main page component
-export default async function page(props: any) {
+export default async function page(props: PageProps) {
   const { id } = props.params;
   const { key, qr } = props.searchParams || {};
 
