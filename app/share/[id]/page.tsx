@@ -36,12 +36,15 @@ async function generateQRCode(url: string): Promise<string | null> {
   }
 }
 
+type Props = {
+  params: { id: string };
+  searchParams: { [key: string]: string | undefined };
+}
+
 // Metadata generation
 export async function generateMetadata({
   params,
-}: {
-  params: { id: string }
-}): Promise<Metadata> {
+}: Props): Promise<Metadata> {
   const generatedApp = await getGeneratedAppByID(params.id);
 
   if (!generatedApp?.prompt || typeof generatedApp.prompt !== "string") {
@@ -60,14 +63,8 @@ export async function generateMetadata({
   };
 }
 
-// Main page component with correct type definitions
-export default async function SharePage({
-  params,
-  searchParams,
-}: {
-  params: { id: string };
-  searchParams: { [key: string]: string | undefined };
-}) {
+// Main page component
+const SharePage = async ({ params, searchParams }: Props) => {
   const key = searchParams.key;
   const qr = searchParams.qr;
 
@@ -145,3 +142,5 @@ export default async function SharePage({
     </div>
   );
 }
+
+export default SharePage;
