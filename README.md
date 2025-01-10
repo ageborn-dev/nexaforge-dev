@@ -7,6 +7,13 @@
   Transform your ideas into code using multiple AI models. Built on the foundation of GeminiCoder, enhanced with powerful new features.
 </p>
 
+<div align="center">
+  <a href="https://nexaforge.example.com">Try it live</a>
+  <p align="center">
+    Soon live.
+  </p>
+</div>
+
 ## Overview
 
 NexaForge is a powerful web application that allows you to generate functional applications from natural language descriptions. This project is a significant enhancement of [GeminiCoder](https://github.com/osanseviero/geminicoder), adding multiple AI model support and advanced features while maintaining the core simplicity.
@@ -54,24 +61,68 @@ NexaForge is a powerful web application that allows you to generate functional a
 
 ## 🚀 Getting Started
 
-1. Clone the repository:
-```bash
-git clone https://github.com/nexaforge-dev/nexaforge
-```
+Follow these step-by-step instructions to set up NexaForge, even if you're a beginner!
 
-2. Create a `.env` file and add your API keys:
-```env
-GOOGLE_AI_API_KEY=
-ANTHROPIC_API_KEY=
-OPENAI_API_KEY=
-DEEPSEEK_API_KEY=
-```
+1. **Clone the Repository**:
+   Open your terminal and run:
+   ```bash
+   git clone https://github.com/ageborn-dev/nexaforge-dev
+   ```
+   This command will download the NexaForge project to your computer.
 
-3. Install dependencies and run:
-```bash
-npm install
-npm run dev
-```
+2. **Navigate to the Project Directory**:
+   ```bash
+   cd nexaforge-dev
+   ```
+
+3. **Install Node.js** (if not already installed):
+   - Download and install Node.js from [nodejs.org](https://nodejs.org/).
+   - Confirm installation by running:
+     ```bash
+     node -v
+     npm -v
+     ```
+
+4. **Install Dependencies**:
+   Inside the project folder, run:
+   ```bash
+   npm install
+   ```
+   This will download all necessary libraries and dependencies.
+
+5. **Create a `.env` File**:
+   - In the project root, create a file named `.env`.
+   - Add your API keys for supported providers:
+     ```env
+     GOOGLE_AI_API_KEY=
+     ANTHROPIC_API_KEY=
+     OPENAI_API_KEY=
+     DEEPSEEK_API_KEY=
+     ```
+     > Note: Ollama does not require an API key but runs on your local server.
+
+6. **Start the Development Server**:
+   ```bash
+   npm run dev
+   ```
+   This will start the app locally. Open your browser and navigate to `http://localhost:3000` to use NexaForge.
+
+7. **Set Up Ollama (Optional)**:
+   - Install the Ollama CLI by following the [official guide](https://ollama.com/docs/cli/installation).
+   - Start the Ollama server:
+     ```bash
+     ollama start
+     ```
+   - NexaForge will automatically detect and use available Ollama models. To add models, run:
+     ```bash
+     ollama pull <model-name>
+     ```
+     Example:
+     ```bash
+     ollama pull llama-7b
+     ```
+
+You’re all set to explore the power of NexaForge!
 
 ## 🔧 Configuration
 

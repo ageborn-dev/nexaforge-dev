@@ -11,7 +11,32 @@ import Image from 'next/image';
 export const dynamic = 'force-dynamic';
 export const runtime = 'nodejs';
 
-// Remove type declarations and let Next.js infer them
+// Cache the database query
+const getGeneratedAppByID = cache(async (id: string) => {
+  const generatedApp = await client.generatedApp.findUnique({
+    where: { id },
+  });
+  return generatedApp;
+});
+
+// Generate QR code with proper options
+async function generateQRCode(url: string): Promise<string | null> {
+  try {
+    return await QRCode.toDataURL(url, {
+      width: 400,
+      margin: 2,
+      color: {
+        dark: '#000',
+        light: '#fff'
+      }
+    });
+  } catch (err) {
+    console.error('QR Code generation failed:', err);
+    return null;
+  }
+}
+
+// Metadata generation
 export async function generateMetadata({
   params,
 }: {
@@ -19,50 +44,32 @@ export async function generateMetadata({
 }): Promise<Metadata> {
   const generatedApp = await getGeneratedAppByID(params.id);
 
-  let prompt = generatedApp?.prompt;
-  if (typeof prompt !== "string") {
+  if (!generatedApp?.prompt || typeof generatedApp.prompt !== "string") {
     notFound();
   }
 
-  let searchParams = new URLSearchParams();
-  searchParams.set("prompt", prompt);
+  const searchParams = new URLSearchParams();
+  searchParams.set("prompt", generatedApp.prompt);
 
   return {
     title: "An app generated on NexaForge",
-    description: `Prompt: ${generatedApp?.prompt}`,
+    description: `Prompt: ${generatedApp.prompt}`,
     openGraph: {
       images: [`/api/og?${searchParams}`],
     },
   };
 }
 
+// Main page component with correct type definitions
 export default async function SharePage({
   params,
   searchParams,
 }: {
-  params: { id: string },
-  searchParams: { [key: string]: string | undefined }
-  }
-  ) {
-  const getGeneratedAppByID = cache(async (id: string) => {
-    const generatedApp = await client.generatedApp.findUnique({
-      where: { id },
-    });
-    return generatedApp;
-  });
-
-  const generateQRCode = async (url: string) => {
-    try {
-      const qrCodeDataUrl = await QRCode.toDataURL(url);
-      return qrCodeDataUrl;
-    } catch (error) {
-      console.error('Error generating QR code:', error);
-      return null;
-    }
-  };
-
-  const key = typeof searchParams.key === 'string' ? searchParams.key : undefined;
-  const qr = typeof searchParams.qr === 'string' ? searchParams.qr : undefined;
+  params: { id: string };
+  searchParams: { [key: string]: string | undefined };
+}) {
+  const key = searchParams.key;
+  const qr = searchParams.qr;
 
   const generatedApp = await getGeneratedAppByID(params.id);
 
@@ -73,10 +80,12 @@ export default async function SharePage({
   // Generate QR code if requested
   let qrCodeDataUrl: string | null = null;
   if (qr === 'true') {
-    qrCodeDataUrl = await generateQRCode(`${process.env.NEXT_PUBLIC_BASE_URL}/share/${params.id}`);
+    qrCodeDataUrl = await generateQRCode(
+      `${process.env.NEXT_PUBLIC_BASE_URL}/share/${params.id}`
+    );
   }
 
-  // After Prisma schema update, this will work
+  // Query shared code data
   const sharedCode = await client.$queryRaw`
     SELECT * FROM "SharedCode" WHERE "appId" = ${params.id}
   `;
@@ -84,6 +93,7 @@ export default async function SharePage({
   if (sharedCode && Array.isArray(sharedCode) && sharedCode.length > 0) {
     const shareData = sharedCode[0];
     
+    // Handle encrypted content
     if (shareData.isEncrypted && !key) {
       return redirect(`/share/${params.id}/protected`);
     }
@@ -98,14 +108,17 @@ export default async function SharePage({
       }
     }
 
+    // Check expiration
     if (shareData.expiresAt && new Date(shareData.expiresAt) < new Date()) {
       return <div>Share link expired</div>;
     }
 
+    // Handle view limits
     if (shareData.remainingViews !== null && shareData.remainingViews <= 0) {
       return <div>Maximum views reached</div>;
     }
 
+    // Decrement remaining views if applicable
     if (shareData.remainingViews !== null) {
       await client.$executeRaw`
         UPDATE "SharedCode" 
@@ -131,28 +144,4 @@ export default async function SharePage({
       <CodeViewer code={generatedApp.code} model={""} prompt={""} />
     </div>
   );
-}
-
-const getGeneratedAppByID = cache(async (id: string) => {
-  return client.generatedApp.findUnique({
-    where: {
-      id,
-    },
-  });
-});
-
-async function generateQRCode(url: string): Promise<string> {
-  try {
-    return await QRCode.toDataURL(url, {
-      width: 400,
-      margin: 2,
-      color: {
-        dark: '#000',
-        light: '#fff'
-      }
-    });
-  } catch (err) {
-    console.error('QR Code generation failed:', err);
-    return '';
-  }
 }
