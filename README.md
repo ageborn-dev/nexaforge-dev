@@ -185,6 +185,15 @@ With the latest integration of Ollama, you can now leverage powerful LLaMA-based
    - NexaForge automatically detects and loads models from the running Ollama server.
    - Simply ensure the Ollama server is running, and NexaForge will utilize the available models dynamically.
 
+🚀 TODO
+We are actively working on exciting new features and improvements for NexaForge. Here’s what’s coming next:
+
+🧠 Integration of LangChain Agents: Enhance functionality with powerful, modular agents for specific tasks.
+🛠️ Improved Error Detection and Fixing: More robust tools to identify and fix runtime errors during code generation.
+✨ Enhanced Code Generation: Smarter, faster generation of optimized code snippets.
+🌍 Multi-Language Support: Extend support beyond React to include additional programming languages and frameworks.
+
+
 ## 🙏 Acknowledgments
 
 This project is based on [GeminiCoder](https://github.com/osanseviero/geminicoder) by [osanseviero](https://github.com/osanseviero), which in turn was inspired by [llamacoder](https://github.com/Nutlope/llamacoder). We've built upon their excellent foundation to create an enhanced multi-model experience.
