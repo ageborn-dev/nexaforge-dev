@@ -185,14 +185,13 @@ With the latest integration of Ollama, you can now leverage powerful LLaMA-based
    - NexaForge automatically detects and loads models from the running Ollama server.
    - Simply ensure the Ollama server is running, and NexaForge will utilize the available models dynamically.
 
-🚀 TODO
+## 🚀 TODO  
 We are actively working on exciting new features and improvements for NexaForge. Here’s what’s coming next:
 
-🧠 Integration of LangChain Agents: Enhance functionality with powerful, modular agents for specific tasks.
-🛠️ Improved Error Detection and Fixing: More robust tools to identify and fix runtime errors during code generation.
-✨ Enhanced Code Generation: Smarter, faster generation of optimized code snippets.
-🌍 Multi-Language Support: Extend support beyond React to include additional programming languages and frameworks.
-
+- 🧠 **Integration of LangChain Agents**: Enhance functionality with powerful, modular agents for specific tasks.  
+- 🛠️ **Improved Error Detection and Fixing**: More robust tools to identify and fix runtime errors during code generation.  
+- ✨ **Enhanced Code Generation**: Smarter, faster generation of optimized code snippets.  
+- 🌍 **Multi-Language Support**: Extend support beyond React to include additional programming languages and frameworks.
 
 ## 🙏 Acknowledgments
 
