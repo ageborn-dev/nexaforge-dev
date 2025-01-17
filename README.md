@@ -25,6 +25,7 @@ NexaForge is a powerful web application that allows you to generate functional a
   - OpenAI GPT
   - DeepSeek
   - Ollama
+  - Grok
 
 - **Enhanced Development Features**:
   - Real-time code generation with streaming support
