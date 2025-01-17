@@ -20,6 +20,11 @@ const deepseek = new OpenAI({
   apiKey: process.env.DEEPSEEK_API_KEY || "",
 });
 
+const grok = new OpenAI({
+  baseURL: "https://api.x.ai/v1",
+  apiKey: process.env.XAI_API_KEY || "",
+});
+
 const systemPrompt = `Generate a creative app idea in the following format EXACTLY:
 "Build me a [type] app that [brief description of main functionality]"
 
@@ -147,8 +152,10 @@ export async function POST(req: Request) {
         stream = new ReadableStream({
           async start(controller) {
             for await (const chunk of anthropicStream) {
-              if (chunk.type === "content_block_delta" && chunk.delta?.text) {
-                controller.enqueue(encoder.encode(chunk.delta.text));
+              if (chunk.type === "content_block_delta" && 'text' in chunk.delta) {
+                if ('text' in chunk.delta) {
+                  controller.enqueue(encoder.encode(chunk.delta.text));
+                }
               }
             }
             controller.close();
@@ -169,6 +176,30 @@ export async function POST(req: Request) {
         stream = new ReadableStream({
           async start(controller) {
             for await (const chunk of deepseekStream) {
+              if (chunk.choices[0]?.delta?.content) {
+                controller.enqueue(
+                  encoder.encode(chunk.choices[0].delta.content),
+                );
+              }
+            }
+            controller.close();
+          },
+        });
+        break;
+
+      case "grok":
+        const grokStream = await grok.chat.completions.create({
+          model,
+          messages: [
+            { role: "system", content: systemPrompt },
+            { role: "user", content: ideaPrompt },
+          ],
+          stream: true,
+          temperature: 0.9,
+        });
+        stream = new ReadableStream({
+          async start(controller) {
+            for await (const chunk of grokStream) {
               if (chunk.choices[0]?.delta?.content) {
                 controller.enqueue(
                   encoder.encode(chunk.choices[0].delta.content),

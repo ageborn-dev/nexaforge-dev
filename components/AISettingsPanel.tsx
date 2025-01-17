@@ -2,15 +2,7 @@ import React, { useState, useEffect } from "react";
 import { Settings2, X, Undo2, HelpCircle } from "lucide-react";
 import { AI_PROVIDERS } from "@/config/ai-providers";
 import * as Tooltip from "@radix-ui/react-tooltip";
-
-interface AISettings {
-  temperature: number;
-  maxTokens: number;
-  topP: number;
-  streamOutput: boolean;
-  frequencyPenalty: number;
-  presencePenalty: number;
-}
+import { AISettings } from '@/types/models/ai';
 
 interface AISettingsPanelProps {
   visible: boolean;

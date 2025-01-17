@@ -20,6 +20,11 @@ const deepseek = new OpenAI({
   apiKey: process.env.DEEPSEEK_API_KEY || "",
 });
 
+const grok = new OpenAI({
+  baseURL: "https://api.x.ai/v1",
+  apiKey: process.env.XAI_API_KEY || "",
+});
+
 const systemPrompt = `Refine app development prompts by:
 - Defining a clear, focused app purpose
 - Specifying core features suitable for React
@@ -69,7 +74,6 @@ export async function POST(req: Request) {
     AI_PROVIDERS.ollama.some((m) => m.id === model),
   );
 
-  
   // Find provider based on model ID
   const providerEntry = Object.entries(AI_PROVIDERS).find(([_, models]) =>
     models.some((m) => m.id === model),
@@ -172,8 +176,32 @@ export async function POST(req: Request) {
         });
         break;
 
+      case "grok":
+        const grokStream = await grok.chat.completions.create({
+          model,
+          messages: [
+            { role: "system", content: systemPrompt },
+            { role: "user", content: refinementPrompt },
+          ],
+          stream: true,
+          temperature: 0.7,
+        });
+
+        stream = new ReadableStream({
+          async start(controller) {
+            for await (const chunk of grokStream) {
+              if (chunk.choices[0]?.delta?.content) {
+                controller.enqueue(
+                  encoder.encode(chunk.choices[0].delta.content),
+                );
+              }
+            }
+            controller.close();
+          },
+        });
+        break;
+
       case "ollama":
-        
         const ollamaResponse = await fetch(
           "http://localhost:11434/api/generate",
           createOllamaRequest(model, systemPrompt + "\n\n" + refinementPrompt, {

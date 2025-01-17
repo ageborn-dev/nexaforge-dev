@@ -1,15 +1,14 @@
-// components/ShareCode.tsx
-
 import React, { useState } from "react";
 import { Share2, Check, Copy, Link, Clock, Lock, Eye } from "lucide-react";
 import * as Popover from "@radix-ui/react-popover";
 import * as Switch from "@radix-ui/react-switch";
+import { AISettings } from '@/types';
 
 interface ShareCodeProps {
   code: string;
   prompt: string;
   model: string;
-  settings: any;
+  settings: AISettings;
 }
 
 interface ShareOptions {

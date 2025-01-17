@@ -9,16 +9,18 @@ import {
   ChevronRight,
   Settings2,
   Loader2,
+  Cpu,
 } from "lucide-react";
 import * as Select from "@radix-ui/react-select";
 import { motion } from "framer-motion";
-import { FormEvent, useEffect, useState, useMemo } from "react";
+import { FormEvent, useEffect, useState, useMemo, useCallback } from "react";
 import LoadingDots from "@/components/loading-dots";
 import {
   AI_PROVIDERS,
   ENABLED_PROVIDERS,
   initializeOllamaModels,
   getModelFullName,
+  refreshOllamaModels,
 } from "@/config/ai-providers";
 import CodeViewer from "@/components/code-viewer";
 import AnalyticsWindow from "@/components/AnalyticsWindow";
@@ -27,65 +29,16 @@ import SpinnerLoader from "@/components/SpinnerLoader";
 import AISettingsPanel from "@/components/AISettingsPanel";
 import ChatInterface from "@/components/ChatInterface";
 import SavedGenerations from "@/components/SavedGenerations";
-import { fetchOllamaModels } from "@/utils/ollama";
-
-type Status =
-  | "initial"
-  | "creating"
-  | "created"
-  | "updating"
-  | "updated"
-  | "refining"
-  | "brainstorming";
-
-interface TokenAnalytics {
-  modelName: string;
-  provider: string;
-  promptTokens: number;
-  responseTokens: number;
-  totalTokens: number;
-  maxTokens: number;
-  utilizationPercentage: string;
-}
-
-interface CumulativeTokenAnalytics extends TokenAnalytics {
-  cumulativePromptTokens: number;
-  cumulativeResponseTokens: number;
-  cumulativeTotalTokens: number;
-}
-
-interface Analytics {
-  modelName: string;
-  provider: string;
-  promptTokens: number;
-  responseTokens: number;
-  totalTokens: number;
-  maxTokens: number;
-  utilizationPercentage: number;
-}
-
-interface SavedGeneration {
-  id: string;
-  title: string;
-  description: string | null;
-  createdAt: string;
-  generatedApp: {
-    id: string;
-    code: string;
-    model: string;
-    prompt: string;
-    analytics: Analytics | null;
-  };
-}
-
-interface AISettings {
-  temperature: number;
-  maxTokens: number;
-  topP: number;
-  streamOutput: boolean;
-  frequencyPenalty: number;
-  presencePenalty: number;
-}
+import { fetchOllamaModels, isOllamaAvailable } from "@/utils/ollama";
+import { 
+  Status,
+  TokenAnalytics,
+  CumulativeTokenAnalytics,
+  Analytics,
+  SavedGeneration,
+  AISettings,
+  OllamaModel
+} from '@/types';
 
 function removeCodeFormatting(code: string): string {
   return code
@@ -104,7 +57,9 @@ const getDefaultSettings = (provider: string): AISettings => ({
           ? 1000000
           : provider === "deepseek"
             ? 32768
-            : 200000,
+            : provider === "grok"
+              ? 32768
+              : 200000,
   topP: 1,
   streamOutput: true,
   frequencyPenalty: 0,
@@ -114,32 +69,26 @@ const getDefaultSettings = (provider: string): AISettings => ({
 export default function Home() {
   const [isModelInitialized, setIsModelInitialized] = useState(false);
   const [ollamaModels, setOllamaModels] = useState<OllamaModel[]>([]);
-
-  // Initialize Ollama models
-  useEffect(() => {
-    async function initializeModels() {
-      try {
-        await initializeOllamaModels();
-        const models = await fetchOllamaModels();
-        setOllamaModels(models);
-      } catch (error) {
-        console.error("Ollama initialization error:", error);
-      } finally {
-        setIsModelInitialized(true);
-      }
-    }
-
-    initializeModels();
-  }, []);
-
+  const [currentModelValid, setCurrentModelValid] = useState(true);
+  const [status, setStatus] = useState<Status>("initial");
+  const [prompt, setPrompt] = useState("");
+  const [generatedCode, setGeneratedCode] = useState("");
+  const [tokenAnalytics, setTokenAnalytics] = useState<CumulativeTokenAnalytics | null>(null);
+  const [showAnalytics, setShowAnalytics] = useState(false);
+  const [runtimeError, setRuntimeError] = useState<string | null>(null);
+  const [model, setModel] = useState("");
+  const [ref, scrollTo] = useScrollTo();
+  const [messages, setMessages] = useState<{ role: string; content: string }[]>([]);
+  const [currentGeneratedAppId, setCurrentGeneratedAppId] = useState<string | null>(null);
+  const [chatVisible, setChatVisible] = useState(false);
+  const [refinementMessages, setRefinementMessages] = useState<{ role: string; content: string }[]>([]);
+  const [showSettings, setShowSettings] = useState(false);
+  // Memoized grouped models
   const groupedModels = useMemo(() => {
     if (!isModelInitialized) return [];
 
     return Object.entries(AI_PROVIDERS)
-      .filter(
-        ([provider]) =>
-          ENABLED_PROVIDERS[provider as keyof typeof ENABLED_PROVIDERS],
-      )
+      .filter(([provider]) => ENABLED_PROVIDERS[provider as keyof typeof ENABLED_PROVIDERS])
       .map(([provider, models]) => ({
         provider,
         models: models.map((model) => ({
@@ -149,43 +98,137 @@ export default function Home() {
       }));
   }, [isModelInitialized, ollamaModels]);
 
-  // Component states
-  const [status, setStatus] = useState<Status>("initial");
-  const [prompt, setPrompt] = useState("");
-  const [generatedCode, setGeneratedCode] = useState("");
-  const [tokenAnalytics, setTokenAnalytics] =
-    useState<CumulativeTokenAnalytics | null>(null);
-  const [showAnalytics, setShowAnalytics] = useState(false);
-  const [runtimeError, setRuntimeError] = useState<string | null>(null);
-  const [model, setModel] = useState(groupedModels[0]?.models[0]?.value || "");
-  const [ref, scrollTo] = useScrollTo();
-  const [messages, setMessages] = useState<{ role: string; content: string }[]>(
-    [],
-  );
-  const [currentGeneratedAppId, setCurrentGeneratedAppId] = useState<
-    string | null
-  >(null);
-
-  // Chat interface state
-  const [chatVisible, setChatVisible] = useState(false);
-  const [refinementMessages, setRefinementMessages] = useState<
-    { role: string; content: string }[]
-  >([]);
-
-  // AI Settings states
-  const [showSettings, setShowSettings] = useState(false);
   const initialProvider = groupedModels[0]?.provider || "anthropic";
   const [aiSettings, setAISettings] = useState<AISettings>(() =>
-    getDefaultSettings(initialProvider),
+    getDefaultSettings(initialProvider)
   );
+
+  // Validation function for current model
+  const validateCurrentModel = useCallback((currentModel: string, providers: typeof AI_PROVIDERS) => {
+    return Object.values(providers).some(providerModels => 
+      providerModels.some(model => model.id === currentModel)
+    );
+  }, []);
 
   // Get current provider
   const currentProvider = useMemo(
     () =>
       groupedModels.find((g) => g.models.some((m) => m.value === model))
         ?.provider || initialProvider,
-    [model, groupedModels, initialProvider],
+    [model, groupedModels, initialProvider]
   );
+
+  // Initialize Ollama models
+  useEffect(() => {
+    async function initializeModels() {
+      try {
+        const isOllamaRunning = await isOllamaAvailable();
+        if (isOllamaRunning) {
+          await initializeOllamaModels();
+          const models = await fetchOllamaModels();
+          setOllamaModels(models);
+        }
+        
+        // Set initial model if not set
+        if (!model && groupedModels.length > 0 && groupedModels[0].models.length > 0) {
+          setModel(groupedModels[0].models[0].value);
+        }
+      } catch {
+
+        ENABLED_PROVIDERS.ollama = false;
+      } finally {
+        setIsModelInitialized(true);
+      }
+    }
+
+    initializeModels();
+  }, []);
+
+  // Periodic model refresh
+  useEffect(() => {
+    let isSubscribed = true;
+
+    const updateModels = async () => {
+      if (!isModelInitialized) return;
+
+      try {
+        const isOllamaRunning = await isOllamaAvailable();
+        if (isOllamaRunning) {
+          await refreshOllamaModels();
+          const updatedModels = await fetchOllamaModels();
+          
+          if (isSubscribed) {
+            setOllamaModels(updatedModels);
+            
+            // Validate current model after refresh
+            const isValid = validateCurrentModel(model, AI_PROVIDERS);
+            setCurrentModelValid(isValid);
+            
+            // If current model is invalid, switch to first available model
+            if (!isValid && groupedModels.length > 0) {
+              const firstAvailableModel = groupedModels[0].models[0]?.value;
+              if (firstAvailableModel) {
+                setModel(firstAvailableModel);
+              }
+            }
+          }
+        } else {
+          ENABLED_PROVIDERS.ollama = false;
+          if (isSubscribed && model && AI_PROVIDERS.ollama.some(m => m.id === model)) {
+            // If current model is an Ollama model, switch to first available non-Ollama model
+            for (const [provider, models] of Object.entries(AI_PROVIDERS)) {
+              if (provider !== 'ollama' && ENABLED_PROVIDERS[provider as keyof typeof ENABLED_PROVIDERS] && models.length > 0) {
+                setModel(models[0].id);
+                break;
+              }
+            }
+          }
+        }
+      } catch {
+        
+        ENABLED_PROVIDERS.ollama = false;
+      }
+    };
+
+    const interval = setInterval(updateModels, 60000);
+    return () => {
+      isSubscribed = false;
+      clearInterval(interval);
+    };
+  }, [model, validateCurrentModel, isModelInitialized, groupedModels]);
+
+  // Update settings when provider changes
+  useEffect(() => {
+    if (currentProvider) {
+      setAISettings((prev) => ({
+        ...prev,
+        temperature: currentProvider === "deepseek" ? 0.0 : prev.temperature,
+        maxTokens:
+          currentProvider === "anthropic"
+            ? 200000
+            : currentProvider === "openai"
+              ? 64000
+              : currentProvider === "google"
+                ? 1000000
+                : currentProvider === "deepseek"
+                  ? 32768
+                  : currentProvider === "grok"
+                    ? 32768
+                    : prev.maxTokens,
+      }));
+    }
+  }, [currentProvider]);
+
+  const loading = status !== "initial" && status !== "created";
+
+  // Effect for code viewer scrolling
+  useEffect(() => {
+    let el = document.querySelector(".cm-scroller");
+    if (el && loading) {
+      let end = el.scrollHeight - el.clientHeight;
+      el.scrollTo({ top: end });
+    }
+  }, [loading, generatedCode]);
 
   const updateTokenAnalytics = (newAnalytics: TokenAnalytics) => {
     setTokenAnalytics((prevAnalytics) => {
@@ -223,41 +266,12 @@ export default function Home() {
     setShowAnalytics(true);
   };
 
-  let loading = status !== "initial" && status !== "created";
-
-  useEffect(() => {
-    if (currentProvider) {
-      setAISettings((prev) => ({
-        ...prev,
-        temperature: currentProvider === "deepseek" ? 0.0 : prev.temperature,
-        maxTokens:
-          currentProvider === "anthropic"
-            ? 200000
-            : currentProvider === "openai"
-              ? 64000
-              : currentProvider === "google"
-                ? 1000000
-                : currentProvider === "deepseek"
-                  ? 32768
-                  : prev.maxTokens,
-      }));
-    }
-  }, [currentProvider]);
-
-  // Effect for code viewer scrolling
-  useEffect(() => {
-    let el = document.querySelector(".cm-scroller");
-    if (el && loading) {
-      let end = el.scrollHeight - el.clientHeight;
-      el.scrollTo({ top: end });
-    }
-  }, [loading, generatedCode]);
-
   const getApiModelName = (selectedModel: string) => {
     return currentProvider === "ollama"
       ? getModelFullName(selectedModel)
       : selectedModel;
   };
+
 
   async function handleChatMessage(message: string) {
     if (!generatedCode || status !== "created") return;
@@ -327,11 +341,6 @@ export default function Home() {
 
   async function generateAppIdea() {
     if (status !== "initial") return;
-
-    console.log("=== Frontend Debug ===");
-    console.log("Current model:", model);
-    console.log("Provider:", currentProvider);
-    console.log("AI_PROVIDERS.ollama:", AI_PROVIDERS.ollama);
 
     setStatus("brainstorming");
     try {
@@ -413,7 +422,6 @@ export default function Home() {
     setTokenAnalytics(null);
     setChatVisible(false);
     setRefinementMessages([]);
-
     setMessages([{ role: "user", content: prompt }]);
 
     try {
@@ -437,22 +445,20 @@ export default function Home() {
       let ollamaResponseData = "";
 
       while (true) {
-      const { done, value } = await reader.read();
-      if (done) break;
+        const { done, value } = await reader.read();
+        if (done) break;
 
-      const chunk = new TextDecoder().decode(value);
-      receivedData += chunk;
-      
-      // Store raw response for Ollama analytics
-      if (currentProvider === "ollama") {
-        ollamaResponseData += chunk;
+        const chunk = new TextDecoder().decode(value);
+        receivedData += chunk;
+        
+        if (currentProvider === "ollama") {
+          ollamaResponseData += chunk;
+        }
+
+        const cleanedData = removeCodeFormatting(receivedData);
+        setGeneratedCode(cleanedData);
       }
 
-      const cleanedData = removeCodeFormatting(receivedData);
-      setGeneratedCode(cleanedData);
-    }
-
-      // Save generated app
       const generatedAppResponse = await fetch("/api/generated-apps", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -470,7 +476,6 @@ export default function Home() {
       const generatedApp = await generatedAppResponse.json();
       setCurrentGeneratedAppId(generatedApp.id);
 
-      // Calculate analytics with generatedAppId
       const analyticsRes = await fetch("/api/tokenAnalytics", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -594,16 +599,25 @@ export default function Home() {
 
           <div className="mt-6 flex flex-col justify-center gap-4 sm:flex-row sm:items-center sm:gap-8">
             <div className="flex items-center justify-between gap-3 sm:justify-center">
-              <p className="text-white sm:text-xs">Model:</p>
+              <div className="flex items-center gap-2">
+                <Cpu className="h-5 w-5 text-white" />
+                <p className="text-lg font-medium text-white">Model:</p>
+              </div>
               <div className="flex items-center gap-2">
                 <Select.Root
                   name="model"
-                  disabled={loading}
+                  disabled={loading || !currentModelValid}
                   value={model}
                   onValueChange={setModel}
                 >
-                  <Select.Trigger className="group flex w-60 max-w-xs items-center rounded-2xl border border-white/50 bg-white/40 px-4 py-2 text-sm shadow-lg backdrop-blur-[2px] focus-visible:outline focus-visible:outline-2 focus-visible:outline-cyan-300">
-                    <Select.Value className="text-gray-800" />
+                  <Select.Trigger 
+                    className={`group flex w-60 max-w-xs items-center rounded-2xl border border-white/50 ${
+                      currentModelValid ? 'bg-white/40' : 'bg-red-100/40'
+                    } px-4 py-2 text-sm shadow-lg backdrop-blur-[2px] focus-visible:outline focus-visible:outline-2 focus-visible:outline-cyan-300`}
+                  >
+                    <Select.Value className="text-gray-800">
+                      {!currentModelValid ? 'Refreshing models...' : undefined}
+                    </Select.Value>
                     <Select.Icon className="ml-auto">
                       <ChevronDownIcon className="size-6 text-gray-700 group-hover:text-gray-900" />
                     </Select.Icon>
@@ -615,8 +629,7 @@ export default function Home() {
                         {groupedModels.map(({ provider, models }) => (
                           <div key={provider}>
                             <div className="px-3 py-2 text-sm font-medium text-gray-900">
-                              {provider.charAt(0).toUpperCase() +
-                                provider.slice(1)}
+                              {provider.charAt(0).toUpperCase() + provider.slice(1)}
                             </div>
                             {models.map((model) => (
                               <Select.Item
@@ -727,7 +740,10 @@ export default function Home() {
         onAnalyticsUpdate={(analytics) => updateTokenAnalytics(analytics)}
       />
 
-      <AnalyticsWindow analytics={tokenAnalytics} visible={showAnalytics} />
+      <AnalyticsWindow 
+        analytics={tokenAnalytics} 
+        visible={showAnalytics} 
+      />
 
       <AISettingsPanel
         visible={showSettings}

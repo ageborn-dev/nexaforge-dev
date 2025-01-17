@@ -1,21 +1,9 @@
 import React, { useState, useMemo } from 'react';
 import { BarChart2, AlertCircle, ChevronLeft, ChevronRight } from 'lucide-react';
-
-interface TokenAnalytics {
-  modelName: string;
-  provider: string;
-  promptTokens: number;
-  responseTokens: number;
-  totalTokens: number;
-  maxTokens: number;
-  utilizationPercentage: string;
-  cumulativePromptTokens: number;
-  cumulativeResponseTokens: number;
-  cumulativeTotalTokens: number;
-}
+import { CumulativeTokenAnalytics } from '@/types/models/analytics';
 
 interface AnalyticsWindowProps {
-  analytics: TokenAnalytics | null;
+  analytics: CumulativeTokenAnalytics | null;
   visible: boolean;
 }
 
@@ -30,7 +18,8 @@ export default function AnalyticsWindow({ analytics, visible }: AnalyticsWindowP
       'openai': 0.002,
       'anthropic': 0.0015,
       'google': 0.001,
-      'deepseek': 0.0008
+      'deepseek': 0.0008,
+      'grok': 0.002
     };
     
     const rate = rates[analytics.provider.toLowerCase()] || 0;

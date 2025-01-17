@@ -93,14 +93,24 @@ export const AI_PROVIDERS: Record<string, AIModel[]> = {
       maxTokens: 32768
     }
   ],
+  grok: [
+    {
+      id: 'grok-2-1212',
+      name: 'Grok 2',
+      provider: 'xAI',
+      maxTokens: 32768
+    },
+  ],
+
   ollama: []
 };
 
 export const DEFAULT_MODELS = {
-  openai: 'gpt-4o',
+  openai: 'gpt-4o-mini',
   anthropic: 'claude-3-5-sonnet-20241022',
   google: 'gemini-2.0-flash-exp',
   deepseek: 'deepseek-chat',
+  grok: 'grok-2-1212',
   ollama: ''
 };
 
@@ -110,6 +120,7 @@ export type EnabledProviders = {
   google: boolean;
   deepseek: boolean;
   ollama: boolean;
+  grok: boolean;
 };
 
 export const ENABLED_PROVIDERS: EnabledProviders = {
@@ -117,6 +128,7 @@ export const ENABLED_PROVIDERS: EnabledProviders = {
   anthropic: !!process.env.ANTHROPIC_API_KEY,
   google: !!process.env.GOOGLE_API_KEY,
   deepseek: !!process.env.DEEPSEEK_API_KEY,
+  grok: !!process.env.XAI_API_KEY,
   ollama: false
 };
 

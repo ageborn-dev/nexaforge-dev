@@ -46,6 +46,7 @@ function estimateTokens(text: string, provider: string, ollamaResponse?: string)
   switch (provider) {
     case 'openai':
     case 'deepseek':
+    case 'grok':
       return encode(text).length;
     case 'anthropic':
       return Math.ceil(encode(text).length * 1.1);

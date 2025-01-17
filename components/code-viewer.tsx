@@ -14,13 +14,14 @@ import dedent from "dedent";
 import "./code-viewer.css";
 import { useEffect, useState } from "react";
 import ShareCode from '@/components/ShareCode';
+import { AISettings } from '@/types';
 
 interface CodeViewerProps {
   code: string;
   showEditor?: boolean;
   model: string;
   prompt: string;
-  settings?: any;
+  settings?: AISettings;
   onError?: (error: string | null) => void;
 }
 
@@ -28,7 +29,7 @@ function EditorControls({ code, model, prompt, settings }: {
   code: string;
   model: string;
   prompt: string;
-  settings?: any;
+  settings?: AISettings;
 }) {
   const { sandpack } = useSandpack();
   const { code: activeCode } = useActiveCode();
@@ -82,7 +83,6 @@ function EditorControls({ code, model, prompt, settings }: {
     }
   };
 
-  
   const handleCodeSandbox = async () => {
     try {
       // Create package.json

@@ -1,31 +1,27 @@
 import React, { useState, useCallback, useRef, useEffect } from "react";
-import { Send, Loader2, MessageSquare, Bot, User } from "lucide-react";
-
-interface ChatMessage {
-  id: string;
-  role: "user" | "assistant";
-  content: string;
-  timestamp: number;
-  error?: boolean;
-  thinking?: boolean;
-}
-
-interface TokenAnalytics {
-  modelName: string;
-  provider: string;
-  promptTokens: number;
-  responseTokens: number;
-  totalTokens: number;
-  maxTokens: number;
-  utilizationPercentage: string;
-}
+import {
+  Send,
+  Loader2,
+  MessageSquare,
+  Bot,
+  User,
+  Wand2,
+  Brain,
+} from "lucide-react";
+import { createErrorFixer } from "@/utils/error-fix-chain";
+import {
+  formatErrorContext,
+  parseErrorDetails,
+} from "@/utils/error-fix-schema";
+import { AI_PROVIDERS, ENABLED_PROVIDERS } from "@/config/ai-providers";
+import { ChatMessage, TokenAnalytics, AISettings, AIModel } from "@/types";
 
 interface ChatInterfaceProps {
   visible: boolean;
   loading: boolean;
   currentCode: string;
   model: string;
-  settings: any;
+  settings: AISettings;
   prompt: string;
   generatedAppId: string | null;
   onUpdateCode: (newCode: string) => void;
@@ -47,7 +43,8 @@ const ChatInterface: React.FC<ChatInterfaceProps> = ({
     {
       id: "initial-message",
       role: "assistant",
-      content: "Hi! I can help you refine the code or fix any issues. What would you like me to do?",
+      content:
+        "Hi! I can help you refine the code or fix any issues. What would you like me to do?",
       timestamp: Date.now(),
     },
   ]);
@@ -55,6 +52,7 @@ const ChatInterface: React.FC<ChatInterfaceProps> = ({
   const [isExpanded, setIsExpanded] = useState(true);
   const [retryCount, setRetryCount] = useState(0);
   const [lastError, setLastError] = useState<string | null>(null);
+  const [isErrorFixing, setIsErrorFixing] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const [isThinking, setIsThinking] = useState(false);
 
@@ -66,12 +64,42 @@ const ChatInterface: React.FC<ChatInterfaceProps> = ({
     scrollToBottom();
   }, [messages]);
 
+  const getFirstEnabledProvider = useCallback((): {
+    provider: string;
+    modelId: string;
+  } | null => {
+    for (const [provider, enabled] of Object.entries(ENABLED_PROVIDERS)) {
+      if (enabled && AI_PROVIDERS[provider]?.length > 0) {
+        return {
+          provider,
+          modelId: AI_PROVIDERS[provider][0].id,
+        };
+      }
+    }
+    return null;
+  }, []);
+
+  const getProviderFromModel = useCallback(
+    (modelId: string): string | null => {
+      for (const [provider, models] of Object.entries(AI_PROVIDERS)) {
+        if (models.some((m) => m.id === modelId)) {
+          if (ENABLED_PROVIDERS[provider as keyof typeof ENABLED_PROVIDERS]) {
+            return provider;
+          }
+        }
+      }
+      const fallback = getFirstEnabledProvider();
+      return fallback?.provider || null;
+    },
+    [getFirstEnabledProvider],
+  );
+
   const updateAnalytics = async (generatedCode: string) => {
     if (!generatedAppId) {
-      console.error('Missing generatedAppId');
+      console.error("Missing generatedAppId");
       return;
     }
-  
+
     try {
       const analyticsData = {
         model,
@@ -79,22 +107,17 @@ const ChatInterface: React.FC<ChatInterfaceProps> = ({
         prompt,
         generatedAppId,
       };
-  
-      console.log('Sending analytics data:', {
-        ...analyticsData,
-        generatedCode: `${analyticsData.generatedCode.slice(0, 50)}...`
-      });
-  
+
       const response = await fetch("/api/tokenAnalytics", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(analyticsData),
       });
-  
+
       if (!response.ok) {
         throw new Error(`Analytics error: ${response.status}`);
       }
-  
+
       const analytics = await response.json();
       if (onAnalyticsUpdate) {
         onAnalyticsUpdate(analytics);
@@ -150,137 +173,204 @@ const ChatInterface: React.FC<ChatInterfaceProps> = ({
         return { isValid: false, error: "Code validation failed" };
       }
     },
-    []
+    [],
   );
 
   const generateMessageId = () => {
     return `msg-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
   };
 
-  const createContextualPrompt = useCallback(
-    (userRequest: string, code: string, originalPrompt: string, lastError: string | null): string => {
-      // Parse complex error messages into structured format
-      const parseError = (error: string) => {
-        const syntaxErrorMatch = error.match(/SyntaxError:(.*?)\n/s);
-        const lineColMatch = error.match(/\((\d+):(\d+)\)/);
-        const codeSnippetMatch = error.match(/(?:\n\s*\d+ \|.*){2,4}/);
-        
-        return {
-          message: syntaxErrorMatch ? syntaxErrorMatch[1].trim() : error,
-          line: lineColMatch ? parseInt(lineColMatch[1]) : null,
-          column: lineColMatch ? parseInt(lineColMatch[2]) : null,
-          snippet: codeSnippetMatch ? codeSnippetMatch[0].trim() : '',
-          fullError: error
-        };
-      };
-  
-      // Generate targeted fix instructions based on error type
-      const getErrorSpecificInstructions = (error: string) => {
-        const parsedError = parseError(error);
-        const instructions = [];
-  
-        if (error.includes('SyntaxError')) {
-          instructions.push(
-            "- Fix the syntax error in the component",
-            "- Ensure proper JSX formatting and tag closure",
-            "- Validate attribute syntax and values",
-            `- Pay special attention to line ${parsedError.line || 'with error'}`
-          );
-        } else if (error.includes('TypeError')) {
-          instructions.push(
-            "- Fix type-related issues in the component",
-            "- Ensure proper prop types and interfaces",
-            "- Validate null/undefined handling",
-            "- Check object property access"
-          );
-        } else if (error.includes('ReferenceError')) {
-          instructions.push(
-            "- Fix undefined variable references",
-            "- Verify all required imports are present",
-            "- Check variable scope and declarations",
-            "- Validate hook usage rules"
-          );
-        } else {
-          instructions.push(
-            "- Review and fix the component structure",
-            "- Ensure proper React patterns are followed",
-            "- Validate component logic and data flow",
-            "- Check for potential runtime issues"
-          );
-        }
-  
-        return instructions.join('\n');
-      };
-  
-      let errorContext = '';
-      if (lastError) {
-        const parsedError = parseError(lastError);
-        errorContext = `
-  Current Error Details:
-  ${parsedError.message}
-  ${parsedError.line ? `At Line: ${parsedError.line}${parsedError.column ? `, Column: ${parsedError.column}` : ''}` : ''}
-  ${parsedError.snippet ? `\nProblematic Code Section:\n${parsedError.snippet}` : ''}
-  
-  Required Fixes:
-  ${getErrorSpecificInstructions(lastError)}
-  
-  Special Instructions:
-  1. Maintain existing imports and component structure
-  2. Preserve all working functionality
-  3. Focus on fixing the identified error
-  4. Ensure proper TypeScript types
-  5. Follow React best practices
-  `;
+  const handleErrorFix = async (error: string) => {
+    setIsErrorFixing(true);
+    setIsThinking(true);
+
+    const thinkingMessage: ChatMessage = {
+      id: generateMessageId(),
+      role: "assistant",
+      content: "Analyzing error...",
+      timestamp: Date.now(),
+      thinking: true,
+      isErrorFix: true,
+    };
+    setMessages((prev) => [...prev, thinkingMessage]);
+
+    try {
+      const provider = getProviderFromModel(model);
+      if (!provider) {
+        throw new Error("No enabled AI provider available");
       }
+
+      const errorDetails = parseErrorDetails(error);
+      const fixStream = await createErrorFixer({
+        provider,
+        model,
+        apiKey: "",
+        code: currentCode,
+        error,
+        errorDetails,
+      });
+
+      let fixedCode = "";
+      for await (const chunk of fixStream) {
+        fixedCode += chunk;
+      }
+
+      if (fixedCode.trim()) {
+        const validation = validateCode(fixedCode);
+        if (validation.isValid) {
+          onUpdateCode(fixedCode);
+          setLastError(null);
+          setMessages((prev) => [
+            ...prev.filter((msg) => !msg.thinking),
+            {
+              id: generateMessageId(),
+              role: "assistant",
+              content:
+                "I've fixed the error. The code should now work correctly. Let me know if you need any other changes!",
+              timestamp: Date.now(),
+              isErrorFix: true,
+            },
+          ]);
+          await updateAnalytics(fixedCode);
+        }
+      }
+    } catch (error) {
+      console.error("Error fixing code:", error);
+      const errorMessage =
+        error instanceof Error ? error.message : "Unknown error occurred";
+      setMessages((prev) => [
+        ...prev.filter((msg) => !msg.thinking),
+        {
+          id: generateMessageId(),
+          role: "assistant",
+          content:
+            errorMessage === "No enabled AI provider available"
+              ? "No AI provider is currently available. Please check the configuration and try again."
+              : "I encountered an error while trying to fix the code. Please try describing the specific changes needed.",
+          timestamp: Date.now(),
+          error: true,
+          isErrorFix: true,
+        },
+      ]);
+    } finally {
+      setIsErrorFixing(false);
+      setIsThinking(false);
+    }
+  };
+
+  const createContextualPrompt = useCallback(
+    (
+      userRequest: string,
+      code: string,
+      originalPrompt: string,
+      lastError: string | null,
+    ): string => {
+      // Extract UI-specific keywords from request
+      const uiTerms = {
+        colors: /colou?r/i.test(userRequest),
+        sizes: /size|width|height/i.test(userRequest),
+        layout: /layout|position|align|margin|padding/i.test(userRequest),
+        components: /button|input|div|container|header/i.test(userRequest),
+      };
+
+      // Determine the type of change requested
+      const changeType = {
+        isVisual: uiTerms.colors || uiTerms.sizes || uiTerms.layout,
+        isComponent: uiTerms.components,
+        isLogic: /function|state|effect|handle|click|event/i.test(userRequest),
+        isData: /data|props|interface|type/i.test(userRequest),
+      };
+
+      // Create targeted context based on change type
+      let targetedContext = "";
+      if (changeType.isVisual) {
+        targetedContext = `
+Focus on UI Modification:
+- Preserve all existing functionality and component structure
+- Only modify the specified visual attributes
+- Maintain Tailwind class consistency
+- Ensure changes only affect the requested elements
+- Keep all existing event handlers and props
+- Preserve any dynamic class bindings`;
+      } else if (changeType.isLogic) {
+        targetedContext = `
+Focus on Logic Modification:
+- Preserve the component's visual appearance
+- Maintain TypeScript type safety
+- Keep existing state management patterns
+- Ensure proper error handling
+- Preserve existing event propagation
+- Handle edge cases appropriately`;
+      }
+
+      let errorContext = "";
+      if (lastError) {
+        const parsedError = parseErrorDetails(lastError);
+        const context = formatErrorContext(code, lastError, parsedError);
+        errorContext = `\nError Context:\n${context}`;
+      }
+
+      return `As a React and TypeScript expert, please help improve this code with precise, targeted changes.
   
-      const basePrompt = `As a React and TypeScript expert, please help improve this code:
+${errorContext}
   
-  ${errorContext}
-  
-  Original Requirements:
-  ${originalPrompt}
-  
-  Current Complete Code:
-  ${code}
-  
-  User Request:
-  ${userRequest}
-  
-  Technical Requirements:
-  1. Return a complete, working React TypeScript component
-  2. Include ALL necessary imports at the top
-  3. Maintain proper component structure and exports
-  4. Use appropriate TypeScript types and interfaces
-  5. Follow React hooks rules and best practices
-  6. Implement proper error handling and null checks
-  7. Use consistent code formatting
-  8. Ensure all JSX is properly formatted and closed
-  9. Maintain existing functionality while fixing issues
-  10. Include proper prop types and interfaces
-  
-  Format Requirements:
-  - Start the response with imports
-  - Include the complete component code
-  - Use proper TypeScript syntax
-  - Do not include any explanations or markdown
-  - Provide only the working code
-  - Ensure the code can be used as-is
-  
-  Additional Context:
-  - Framework: React 18+ with TypeScript
-  - Style: Tailwind CSS
-  - Package Manager: npm/yarn
-  - Environment: Next.js application
-  `;
-  
-      return basePrompt.trim();
+Original Requirements:
+${originalPrompt}
+
+Current Request:
+${userRequest}
+
+${targetedContext}
+
+Current Complete Code:
+${code}
+
+Change Requirements:
+1. Make only the specific changes requested
+2. Preserve all other functionality and appearance
+3. Maintain proper TypeScript types and interfaces
+4. Keep existing imports and dependencies
+5. Preserve component structure and naming
+6. Ensure changes are scoped to affected areas only
+7. Follow React best practices and hooks rules
+8. Use consistent code formatting
+9. Keep existing error handling and props
+10. Maintain current state management approach
+
+Technical Guidelines:
+- Return complete, working component
+- Include ALL necessary imports
+- Use proper TypeScript syntax
+- Avoid explanatory comments
+- Return only the code
+- Make surgical, precise changes
+- Preserve file structure
+- Keep existing logic flows
+- Maintain component interfaces
+- Use existing helper functions`.trim();
     },
-    []
+    [],
   );
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!inputMessage.trim() || loading) return;
+    if (!inputMessage.trim() || loading || isErrorFixing) return;
+
+    const provider = getProviderFromModel(model);
+    if (!provider) {
+      setMessages((prev) => [
+        ...prev,
+        {
+          id: generateMessageId(),
+          role: "assistant",
+          content:
+            "No AI provider is currently available. Please check the configuration and try again.",
+          timestamp: Date.now(),
+          error: true,
+        },
+      ]);
+      return;
+    }
 
     const newUserMessage: ChatMessage = {
       id: generateMessageId(),
@@ -303,6 +393,11 @@ const ChatInterface: React.FC<ChatInterfaceProps> = ({
     setMessages((prev) => [...prev, thinkingMessage]);
 
     try {
+      if (inputMessage.toLowerCase().includes("error") || lastError) {
+        await handleErrorFix(lastError || inputMessage);
+        return;
+      }
+
       const contextMessage = createContextualPrompt(
         inputMessage,
         currentCode,
@@ -335,6 +430,7 @@ const ChatInterface: React.FC<ChatInterfaceProps> = ({
       const reader = response.body?.getReader();
       const decoder = new TextDecoder();
       let fullResponse = "";
+      let originalCode = currentCode;
 
       if (reader) {
         try {
@@ -354,9 +450,10 @@ const ChatInterface: React.FC<ChatInterfaceProps> = ({
             .replace(/(\s)\s+/g, "$1")
             .trim();
 
-          const finalCode = cleanCode.includes("import React") || !cleanCode.includes("React")
-            ? cleanCode
-            : `import React from 'react';\n${cleanCode}`;
+          const finalCode =
+            cleanCode.includes("import React") || !cleanCode.includes("React")
+              ? cleanCode
+              : `import React from 'react';\n${cleanCode}`;
 
           const validation = validateCode(finalCode);
 
@@ -367,15 +464,68 @@ const ChatInterface: React.FC<ChatInterfaceProps> = ({
 
             await updateAnalytics(finalCode);
 
-            setMessages((prev) => [
-              ...prev.filter((msg) => !msg.thinking),
-              {
-                id: generateMessageId(),
-                role: "assistant",
-                content: "I've updated the code successfully. Let me know if you need any other changes!",
-                timestamp: Date.now(),
-              },
-            ]);
+            // Generate change description using the AI
+            const descriptionPrompt = `
+  You are explaining changes made to a React component. The user requested: "${inputMessage}"
+  
+  Original code and updated code are provided. Analyze what specific changes were made and respond naturally about what was done.
+  Be specific but conversational. Focus on what changed visually or functionally. Don't mention technical details unless relevant.
+  
+  Format response to end with a question about if they want any adjustments or what else they need.
+  `;
+
+            const descriptionResponse = await fetch("/api/generateCode", {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({
+                model,
+                messages: [
+                  {
+                    role: "user",
+                    content: descriptionPrompt,
+                  },
+                ],
+                settings: {
+                  ...settings,
+                  temperature: 0.7,
+                },
+              }),
+            });
+
+            if (descriptionResponse.ok) {
+              const descriptionReader = descriptionResponse.body?.getReader();
+              let changeDescription = "";
+
+              if (descriptionReader) {
+                while (true) {
+                  const { done, value } = await descriptionReader.read();
+                  if (done) break;
+                  changeDescription += decoder.decode(value);
+                }
+                descriptionReader.releaseLock();
+
+                setMessages((prev) => [
+                  ...prev.filter((msg) => !msg.thinking),
+                  {
+                    id: generateMessageId(),
+                    role: "assistant",
+                    content: changeDescription.trim(),
+                    timestamp: Date.now(),
+                  },
+                ]);
+              }
+            } else {
+              setMessages((prev) => [
+                ...prev.filter((msg) => !msg.thinking),
+                {
+                  id: generateMessageId(),
+                  role: "assistant",
+                  content:
+                    "I've updated the code according to your request. Would you like me to make any adjustments?",
+                  timestamp: Date.now(),
+                },
+              ]);
+            }
           } else {
             if (retryCount < 2) {
               setRetryCount((prev) => prev + 1);
@@ -399,7 +549,8 @@ const ChatInterface: React.FC<ChatInterfaceProps> = ({
                   timestamp: Date.now(),
                 };
                 setMessages((prev) => [...prev, retryMessage]);
-                handleSubmit({} as React.FormEvent);
+                
+                handleSubmit({ preventDefault: () => {} } as React.FormEvent);
               }, 1000);
             } else {
               setRetryCount(0);
@@ -410,9 +561,9 @@ const ChatInterface: React.FC<ChatInterfaceProps> = ({
                   id: generateMessageId(),
                   role: "assistant",
                   content: `I'm having trouble generating valid code. Could you please try:
-1. Describing the specific changes needed
-2. Breaking down the request into smaller steps
-3. Providing any error messages you're seeing`,
+  1. Describing the specific changes needed
+  2. Breaking down the request into smaller steps
+  3. Providing any error messages you're seeing`,
                   timestamp: Date.now(),
                   error: true,
                 },
@@ -430,7 +581,8 @@ const ChatInterface: React.FC<ChatInterfaceProps> = ({
         {
           id: generateMessageId(),
           role: "assistant",
-          content: "I encountered an error. Please try rephrasing your request or provide more specific details about what needs to be changed.",
+          content:
+            "I encountered an error. Please try rephrasing your request or provide more specific details about what needs to be changed.",
           timestamp: Date.now(),
           error: true,
         },
@@ -546,14 +698,18 @@ const ChatInterface: React.FC<ChatInterfaceProps> = ({
               onChange={(e) => setInputMessage(e.target.value)}
               placeholder="Describe the changes you need..."
               className="flex-1 rounded-lg bg-white/5 px-3 py-2 text-sm text-white placeholder:text-white/50 focus:outline-none focus:ring-2 focus:ring-white/20"
-              disabled={loading}
+              disabled={loading || isErrorFixing}
             />
             <button
               type="submit"
-              disabled={loading || !inputMessage.trim()}
+              disabled={loading || !inputMessage.trim() || isErrorFixing}
               className="rounded-lg bg-blue-500 p-2 text-white transition-colors hover:bg-blue-600 disabled:opacity-50"
             >
-              <Send className="h-4 w-4" />
+              {isThinking ? (
+                <Loader2 className="h-4 w-4 animate-spin" />
+              ) : (
+                <Send className="h-4 w-4" />
+              )}
             </button>
           </form>
         </>

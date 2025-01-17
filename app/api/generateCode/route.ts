@@ -21,6 +21,11 @@ const deepseek = new OpenAI({
   apiKey: process.env.DEEPSEEK_API_KEY || "",
 });
 
+const grok = new OpenAI({
+  baseURL: "https://api.x.ai/v1",
+  apiKey: process.env.XAI_API_KEY || "",
+});
+
 // Helper function to clean code text
 function cleanCodeText(text: string): string {
   // Remove code block markers if present
@@ -69,17 +74,6 @@ export async function POST(req: Request) {
 
   await initializeOllamaModels();
 
-  console.log("=== Model Validation Debug ===");
-  console.log("Received model:", model);
-  console.log("AI_PROVIDERS after init:", {
-    providers: Object.keys(AI_PROVIDERS),
-    ollamaModels: AI_PROVIDERS.ollama.map((m) => ({ id: m.id, name: m.name })),
-  });
-  console.log(
-    "Model exists in Ollama:",
-    AI_PROVIDERS.ollama.some((m) => m.id === model),
-  );
-  
   // Find the provider and model details
   const providerEntry = Object.entries(AI_PROVIDERS).find(([_, models]) =>
     models.some((m) => m.id === model),
@@ -217,8 +211,50 @@ export async function POST(req: Request) {
         });
         break;
 
+      case "grok":
+        const grokResponse = await grok.chat.completions.create({
+          model,
+          messages: [
+            { role: "system", content: systemPrompt },
+            { role: "user", content: prompt },
+          ],
+          stream: true,
+          temperature: 0.7,
+        });
+
+        stream = new ReadableStream({
+          async start(controller) {
+            let buffer = "";
+            let lastEnqueueTime = Date.now();
+
+            try {
+              for await (const chunk of grokResponse) {
+                if (chunk.choices[0]?.delta?.content) {
+                  buffer += chunk.choices[0].delta.content;
+
+                  const now = Date.now();
+                  if (now - lastEnqueueTime >= 100 && buffer.length > 0) {
+                    controller.enqueue(encoder.encode(cleanCodeText(buffer)));
+                    buffer = "";
+                    lastEnqueueTime = now;
+                  }
+                }
+              }
+
+              if (buffer) {
+                controller.enqueue(encoder.encode(cleanCodeText(buffer)));
+              }
+
+              controller.close();
+            } catch (error) {
+              console.error("DeepSeek streaming error:", error);
+              controller.error(error);
+            }
+          },
+        });
+        break;
+
       case "ollama":
-        
         const ollamaResponse = await fetch(
           "http://localhost:11434/api/generate",
           createOllamaRequest(
