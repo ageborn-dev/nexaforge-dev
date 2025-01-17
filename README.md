@@ -58,6 +58,7 @@ NexaForge is a powerful web application that allows you to generate functional a
     - OpenAI API
     - DeepSeek API
     - Ollama API
+    - Grok API
 
 ## 🚀 Getting Started
 
